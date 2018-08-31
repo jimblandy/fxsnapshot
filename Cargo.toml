@@ -1,0 +1,12 @@
+[package]
+name = "fxsnapshot"
+version = "0.1.0"
+authors = ["Jim Blandy <jimb@red-bean.com>"]
+
+[dependencies]
+failure = "0.1.2"
+memmap = "0.6.2"
+quick-protobuf = { path = "/home/jimb/rust/quick-protobuf/quick-protobuf" }
+
+[build-dependencies]
+pb-rs = { path = "/home/jimb/rust/quick-protobuf/pb-rs" }
