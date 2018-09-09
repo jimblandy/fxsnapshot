@@ -1,0 +1,79 @@
+// -*- mode: rust -*-
+
+use query::ast::{denoted_string,
+                 Expr,
+                 NullaryOp,
+                 Predicate,
+                 PrefixOp,
+                 StreamBinaryOp};
+
+grammar;
+
+pub Expr: Expr = {
+    <PrimaryExpr>,
+    <stream: Expr> <op: StreamBinaryOp> <predicate: Predicate> =>
+        Expr::Stream(op, Box::new(stream), predicate),
+    <stream: Expr> <predicate: PrimaryPredicate> =>
+        Expr::Stream(StreamBinaryOp::Filter, Box::new(stream), predicate),
+};
+
+PrimaryExpr: Expr = {
+    // Number literal.
+    <n: r"0x[0-9a-fA-F]+"> => Expr::Number(u64::from_str_radix(&n[2..], 16).unwrap()),
+
+    // String literal.
+    <n: r#""([^\\"]|\\.)*""#> => Expr::String(denoted_string(&n[1..n.len() - 1])),
+
+    "[" <elts: Comma<Expr>> "]" => Expr::StreamLiteral(elts),
+    <Nullary> => Expr::Nullary(<>),
+    <p: PrefixOp> <e: PrimaryExpr> => Expr::Prefix(p, Box::new(e)),
+};
+
+Nullary: NullaryOp = {
+    "root" => NullaryOp::Root,
+    "nodes" => NullaryOp::Nodes,
+};
+
+PrefixOp: PrefixOp = {
+    "first" => PrefixOp::First,
+    "edges" => PrefixOp::Edges,
+    "paths" => PrefixOp::Paths,
+};
+
+StreamBinaryOp: StreamBinaryOp = {
+    "find" => StreamBinaryOp::Find,
+    "until" => StreamBinaryOp::Until,
+};
+
+Predicate: Predicate = {
+    <PrimaryPredicate>,
+    <left: Predicate> "||" <right: PrimaryPredicate> => {
+        match left {
+            Predicate::Or(mut predicates) => {
+                predicates.push(right);
+                Predicate::Or(predicates)
+            }
+            _ => Predicate::Or(vec![left, right])
+        }
+    }
+};
+
+PrimaryPredicate: Predicate = {
+    <PrimaryExpr> => Predicate::Expr(Box::new(<>)),
+    "{" <predicates: Comma<Predicate>> "}" => Predicate::And(predicates),
+    <id: r"[a-zA-Z_][a-zA-Z0-9_]+"> ":" <predicate: PrimaryPredicate> =>
+        Predicate::Field(id.to_owned(), Box::new(predicate)),
+    "!" <p: PrimaryPredicate> => Predicate::Not(Box::new(p)),
+    "(" <p: Predicate> ")" => p,
+};
+
+Comma<T>: Vec<T> = {
+    <v:(<T> ",")*> <e:T?> => match e {
+        None => v,
+        Some(e) => {
+            let mut v = v;
+            v.push(e);
+            v
+        }
+    }
+};
