@@ -1,7 +1,7 @@
 #![allow(unused_variables, dead_code)]
 
 use dump::{CoreDump, Node};
-use super::ast::{Expr, NullaryOp, PrefixOp, StreamBinaryOp, Predicate};
+use super::ast::{Expr, NullaryOp, UnaryOp, StreamBinaryOp, Predicate};
 use super::value::{self, EvalResult, Value, Stream, TryUnwrap};
 
 impl Expr {
@@ -11,7 +11,7 @@ impl Expr {
             Expr::String(s) => Ok(s.clone().into()),
             Expr::StreamLiteral(elts) => Ok(stream_literal(elts, dump).into()),
             Expr::Nullary(n) => n.eval(dump),
-            Expr::Prefix(op, e) => op.eval(e, dump),
+            Expr::Unary(op, e) => op.eval(e, dump),
             Expr::Stream(op, s, p) => op.eval(s, p, dump),
         }
     }
@@ -34,24 +34,24 @@ impl NullaryOp {
     }
 }
 
-impl PrefixOp {
+impl UnaryOp {
     pub fn eval<'a>(&'a self, operand: &'a Expr, dump: &'a CoreDump) -> EvalResult<'a> {
         let value = operand.eval(dump)?;
         match self {
-            PrefixOp::First => {
+            UnaryOp::First => {
                 let mut stream: Stream<'a> = value.try_unwrap()?;
                 match stream.next() {
                     Some(v) => Ok(v?),
                     None => Err(value::Error::EmptyStream),
                 }
             }
-            PrefixOp::Edges => {
+            UnaryOp::Edges => {
                 let node: Node<'a> = value.try_unwrap()?;
                 let iter = node.edges.clone().into_iter()
                     .map(|e| Ok(e.into()));
                 Ok(Stream::new(iter).into())
             }
-            PrefixOp::Paths => unimplemented!("PrefixOp::Paths"),
+            UnaryOp::Paths => unimplemented!("UnaryOp::Paths"),
         }
     }
 }

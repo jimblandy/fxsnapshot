@@ -49,6 +49,7 @@ fn run() -> Result<(), Error> {
 
     let stdout = std::io::stdout();
     query.eval(&dump)?.top_write(&mut stdout.lock())?;
+    println!();
 
     Ok(())
 }

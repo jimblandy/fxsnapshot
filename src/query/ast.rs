@@ -4,7 +4,7 @@ pub enum Expr {
     String(String),
     StreamLiteral(Vec<Expr>),
     Nullary(NullaryOp),
-    Prefix(PrefixOp, Box<Expr>),
+    Unary(UnaryOp, Box<Expr>),
     Stream(StreamBinaryOp, Box<Expr>, Predicate),
 }
 
@@ -15,7 +15,7 @@ pub enum NullaryOp {
 }
 
 #[derive(Clone, Debug)]
-pub enum PrefixOp {
+pub enum UnaryOp {
     First,
     Edges,
     Paths,

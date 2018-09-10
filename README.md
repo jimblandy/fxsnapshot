@@ -19,7 +19,7 @@ example:
     $ fxsnapshot today.fxsnapshot.pb nodes
     $ fxsnapshot today.fxsnapshot.pb 'nodes { id: 0x7fc384307f80 }'
     $ fxsnapshot today.fxsnapshot.pb 'nodes { coarseType: "Script" }'
-    $ fxsnapshot today.fxsnapshot.pb 'nodes { coarseType: "Script" }'
+    $ fxsnapshot today.fxsnapshot.pb 'nodes { coarseType: "Script" } first edges'
 
 Most of the below is still unimplemented, and may not be coherent, but here's
 the general plan:
@@ -32,7 +32,7 @@ Single values:
 
 - `root` - the snapshot's root node
 
-- `first STREAM` - the first item produced by `STREAM`, or an error if `STREAM`
+- `STREAM first` - the first value produced by `STREAM`, or an error if `STREAM`
   is empty.
 
 - `STREAM find PREDICATE` - the first item from `STREAM` that matches
@@ -44,7 +44,7 @@ Streams:
 
 - `nodes` - a stream of all nodes, in a random order.
 
-- `edges EXPR` - a stream of the edges of the node that `EXPR` evaluates to.
+- `EXPR edges` - a stream of the edges of the node that `EXPR` evaluates to.
 
 - `STREAM { PREDICATE }` - filter `STREAM` by `PREDICATE`. In some cases the
   evaluator optimizes the evaluation of `STREAM` to produce only values matching
@@ -56,7 +56,7 @@ Streams:
 - `STREAM until PREDICATE` - the prefix of `STREAM` until the first value
   satisfying `PREDICATE`.
 
-- `paths STREAM` - given `STREAM`, a finite stream of ids, generate a stream of
+- `STREAM paths` - given `STREAM`, a finite stream of ids, generate a stream of
   all paths that begin with any id from `STREAM`. Here, a 'path' is a non-empty
   stream of edges. Shortest paths are generated first. The paths contain no loops.
 

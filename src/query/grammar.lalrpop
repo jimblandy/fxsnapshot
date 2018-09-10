@@ -4,13 +4,14 @@ use query::ast::{denoted_string,
                  Expr,
                  NullaryOp,
                  Predicate,
-                 PrefixOp,
+                 UnaryOp,
                  StreamBinaryOp};
 
 grammar;
 
 pub Expr: Expr = {
     <PrimaryExpr>,
+    <e: Expr> <op: UnaryOp> => Expr::Unary(op, Box::new(e)),
     <stream: Expr> <op: StreamBinaryOp> <predicate: Predicate> =>
         Expr::Stream(op, Box::new(stream), predicate),
     <stream: Expr> <predicate: PrimaryPredicate> =>
@@ -26,7 +27,6 @@ PrimaryExpr: Expr = {
 
     "[" <elts: Comma<Expr>> "]" => Expr::StreamLiteral(elts),
     <Nullary> => Expr::Nullary(<>),
-    <p: PrefixOp> <e: PrimaryExpr> => Expr::Prefix(p, Box::new(e)),
 };
 
 Nullary: NullaryOp = {
@@ -34,10 +34,10 @@ Nullary: NullaryOp = {
     "nodes" => NullaryOp::Nodes,
 };
 
-PrefixOp: PrefixOp = {
-    "first" => PrefixOp::First,
-    "edges" => PrefixOp::Edges,
-    "paths" => PrefixOp::Paths,
+UnaryOp: UnaryOp = {
+    "first" => UnaryOp::First,
+    "edges" => UnaryOp::Edges,
+    "paths" => UnaryOp::Paths,
 };
 
 StreamBinaryOp: StreamBinaryOp = {
