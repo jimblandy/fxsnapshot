@@ -2,33 +2,26 @@ use dump::{Edge, Node};
 
 use std::io;
 
+/// A value produced by evaluating an expression.
+///
+/// Values of this type may borrow contents from a `CoreDump`, hence the `'dump`
+/// lifetime parameter. Furthermore, stream values also values lazily, as
+/// directed by a borrowed portion of the expression, hence the `'expr` lifetime
+/// parameter. Almost certainly, a `Value`
 #[derive(Clone)]
-pub enum Value<'dump> {
+pub enum Value<'expr, 'dump: 'expr> {
     Number(u64),
     String(String),
     Edge(Edge<'dump>),
     Node(Node<'dump>),
-    Stream(Stream<'dump>)
+    Stream(Stream<'expr, 'dump>)
 }
 
-pub struct Stream<'dump>(Box<CloneableStream<'dump>>);
+pub struct Stream<'expr, 'dump: 'expr>(Box<'expr + CloneableStream<'expr, 'dump>>);
 
-trait CloneableStream<'dump> {
-    fn boxed_clone(&self) -> Box<CloneableStream<'dump>>;
-    fn next(&mut self) -> Option<Value<'dump>>;
-}
-
-impl<'dump> Clone for Stream<'dump> {
-    fn clone(&self) -> Self {
-        Stream(self.0.boxed_clone())
-    }
-}
-
-impl<'dump> Iterator for Stream<'dump> {
-    type Item = Value<'dump>;
-    fn next(&mut self) -> Option<Value<'dump>> {
-        self.0.next()
-    }
+pub trait CloneableStream<'expr, 'dump> {
+    fn boxed_clone(&self) -> Box<'expr + CloneableStream<'expr, 'dump>>;
+    fn next(&mut self) -> Option<Value<'expr, 'dump>>;
 }
 
 /// How to lay out elements of a stream when printed: one per line, or
@@ -43,7 +36,7 @@ enum Orientation {
     Vertical(usize)
 }
 
-impl<'dump> Value<'dump> {
+impl<'expr, 'dump: 'expr> Value<'expr, 'dump> {
     pub fn top_write(&self, stream: &mut io::Write) -> io::Result<()> {
         self.write(&Orientation::Vertical(0), stream)
     }
@@ -60,10 +53,10 @@ impl<'dump> Value<'dump> {
     }
 }
 
-fn write_stream<'dump>(stream: Stream<'dump>,
-                       orientation: &Orientation,
-                       output: &mut io::Write)
-                       -> io::Result<()>
+fn write_stream<'expr, 'dump: 'expr>(stream: Stream<'expr, 'dump>,
+                                     orientation: &Orientation,
+                                     output: &mut io::Write)
+                                     -> io::Result<()>
 {
     match orientation {
         Orientation::Horizontal(indent) => {
@@ -98,3 +91,36 @@ fn write_stream<'dump>(stream: Stream<'dump>,
     Ok(())
 }
 
+impl<'expr, 'dump, I> CloneableStream<'expr, 'dump> for I
+    where 'dump: 'expr,
+          I: 'expr + Iterator<Item=Value<'expr, 'dump>> + Clone
+{
+    fn boxed_clone(&self) -> Box<'expr + CloneableStream<'expr, 'dump>> {
+        Box::new(self.clone())
+    }
+
+    fn next(&mut self) -> Option<Value<'expr, 'dump>> {
+        <Self as Iterator>::next(self)
+    }
+}
+
+impl<'expr, 'dump: 'expr> Stream<'expr, 'dump> {
+    pub fn new<I>(iter: I) -> Stream<'expr, 'dump>
+        where I: 'expr + CloneableStream<'expr, 'dump>
+    {
+        Stream(Box::new(iter))
+    }
+}
+
+impl<'expr, 'dump: 'expr> Clone for Stream<'expr, 'dump> {
+    fn clone(&self) -> Self {
+        Stream(self.0.boxed_clone())
+    }
+}
+
+impl<'expr, 'dump: 'expr> Iterator for Stream<'expr, 'dump> {
+    type Item = Value<'expr, 'dump>;
+    fn next(&mut self) -> Option<Value<'expr, 'dump>> {
+        self.0.next()
+    }
+}

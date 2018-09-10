@@ -1,3 +1,4 @@
+#[derive(Clone, Debug)]
 pub enum Expr {
     Number(u64),
     String(String),
@@ -7,23 +8,27 @@ pub enum Expr {
     Stream(StreamBinaryOp, Box<Expr>, Predicate),
 }
 
+#[derive(Clone, Debug)]
 pub enum NullaryOp {
     Root,
     Nodes,
 }
 
+#[derive(Clone, Debug)]
 pub enum PrefixOp {
     First,
     Edges,
     Paths,
 }
 
+#[derive(Clone, Debug)]
 pub enum StreamBinaryOp {
     Find,
     Filter,
     Until,
 }
 
+#[derive(Clone, Debug)]
 pub enum Predicate {
     Expr(Box<Expr>),
     Field(String, Box<Predicate>),
