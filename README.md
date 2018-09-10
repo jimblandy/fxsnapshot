@@ -1,5 +1,7 @@
 ## fxsnapshot: query Firefox heap snapshots
 
+**NOTE** This is still very much a sketch, barely tested, unrevised, and so on.
+
 This program can query Firefox devtools heap snapshots, search for nodes, find
 paths between nodes, and so on.
 
@@ -9,48 +11,18 @@ The program is invoked like this:
 
     $ fxsnapshot today.fxsnapshot.pb QUERY
 
-Relations:
+The `QUERY` argument is an expression in a little language that operates on
+snapshot edges and nodes, numbers, strings, and lazy streams of the above. For
+example:
 
-    Edge { out: Id, in: Id, name: String }
-    Node {
-       id: Id,
-       typename: String,
-       size: Num,
-       stack: Frame,
-       jsObjectClassName: String,
-       coarseType: CoarseType,
-       scriptFilename: String,
-       descriptiveTypeName: String
-    }
+    $ fxsnapshot today.fxsnapshot.pb root
+    $ fxsnapshot today.fxsnapshot.pb nodes
+    $ fxsnapshot today.fxsnapshot.pb 'nodes { id: 0x7fc384307f80 }'
+    $ fxsnapshot today.fxsnapshot.pb 'nodes { coarseType: "Script" }'
+    $ fxsnapshot today.fxsnapshot.pb 'nodes { coarseType: "Script" }'
 
-Derived:
-
-    reachable: relation(Id, Id).
-    reachable(start, start, []).
-    reachable(start, end, excluded) :- Edge { from: start, to: next }, reachable(next, end).
-
-    allocated_at(id, stack) :- node { id, stack }.
-
-Plotting trees:
-
-    .tree root, child_relation
-
-
-
-
-
-
-
-The `QUERY` argument is an expression in a little language that operates on snapshot edges and nodes. It also includes numbers, strings, various enumerated types, and lazy streams of all the above. For example:
-
-    node { coarseType: Script }
-
-evaluates to a stream of all nodes whose `coarseType` field is `Script` - that
-is, all JSScripts. Or:
-
-    node \n.n edges
-
-
+Most of the below is still unimplemented, and may not be coherent, but here's
+the general plan:
 
 Single values:
 
