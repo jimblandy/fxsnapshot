@@ -1,5 +1,6 @@
 // extern crates
 #[macro_use] extern crate failure;
+#[macro_use] extern crate failure_derive;
              extern crate memmap;
              extern crate petgraph;
              extern crate quick_protobuf;
@@ -45,10 +46,9 @@ fn run() -> Result<(), Error> {
     let bytes = &mmap[..];
 
     let dump = CoreDump::new(path, bytes)?;
-    println!("timestamp: {:?}", dump.timestamp);
 
     let stdout = std::io::stdout();
-    query.eval(&dump).top_write(&mut stdout.lock())?;
+    query.eval(&dump)?.top_write(&mut stdout.lock())?;
 
     Ok(())
 }

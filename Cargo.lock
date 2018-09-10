@@ -233,6 +233,7 @@ name = "fxsnapshot"
 version = "0.1.0"
 dependencies = [
  "failure 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "failure_derive 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "lalrpop 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "lalrpop-util 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "memmap 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",

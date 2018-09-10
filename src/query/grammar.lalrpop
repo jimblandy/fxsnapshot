@@ -60,7 +60,13 @@ Predicate: Predicate = {
 
 PrimaryPredicate: Predicate = {
     <PrimaryExpr> => Predicate::Expr(Box::new(<>)),
-    "{" <predicates: Comma<Predicate>> "}" => Predicate::And(predicates),
+    "{" <predicates: Comma<Predicate>> "}" => {
+        if predicates.len() == 1 {
+            { predicates }.pop().unwrap()
+        } else {
+            Predicate::And(predicates)
+        }
+    },
     <id: r"[a-zA-Z_][a-zA-Z0-9_]+"> ":" <predicate: PrimaryPredicate> =>
         Predicate::Field(id.to_owned(), Box::new(predicate)),
     "!" <p: PrimaryPredicate> => Predicate::Not(Box::new(p)),

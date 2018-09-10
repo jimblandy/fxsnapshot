@@ -151,3 +151,4 @@ mapping them into memory.
 
 - specify our own trait for formatting values?
 - Use From<&[u8]> instead of FromDumpBytes?
+- static type checking

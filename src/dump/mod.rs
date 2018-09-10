@@ -61,7 +61,7 @@ pub struct Node<'buffer> {
 }
 
 /// An edge from one ubi::Node to another, from a core dump.
-#[derive(Clone)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct Edge<'buffer> {
     pub referent: Option<NodeId>,
     pub name: Option<TwoByteString<'buffer>>,
@@ -69,7 +69,7 @@ pub struct Edge<'buffer> {
 
 /// A snapshot node id.
 #[derive(Clone, Copy, Eq, PartialEq, Hash)]
-pub struct NodeId(u64);
+pub struct NodeId(pub u64);
 
 /// A snapshot stack frame id.
 #[derive(Clone, Copy, Eq, PartialEq, Hash)]
@@ -84,11 +84,11 @@ pub struct FrameId(u64);
 pub type Size = u64;
 
 /// A slice of untrusted UTF-8 text, possibly borrowed from a dump.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Eq, PartialEq)]
 pub struct OneByteString<'a>(&'a [u8]);
 
 /// A slice of untrusted UTF-16 text, possibly borrowed from a dump.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Eq, PartialEq)]
 pub struct TwoByteString<'a>(&'a [u16]);
 
 #[derive(Clone, Copy, Debug)]
@@ -146,22 +146,29 @@ impl<'buffer> CoreDump<'buffer> {
         self.node_offsets.len()
     }
 
-    fn get_node_at_offset(&self, offset: usize) -> Result<Node<'buffer>, Error> {
+    fn get_node_at_trusted_offset(&self, offset: usize) -> Node<'buffer> {
         let tail = &self.bytes[offset..];
         let mut reader = BytesReader::from_bytes(tail);
-        let node: protobuf::Node = reader.read_message(tail)?;
-        Ok(Node::from_protobuf(&node, self))
+        let node: protobuf::Node = reader.read_message(tail)
+            .expect("failed to read node at trusted offset");
+        Node::from_protobuf(&node, self)
     }
 
-    pub fn root(&self) -> Result<Node<'buffer>, Error> {
-        self.get_node_at_offset(self.root_offset)
+    pub fn get_root(&self) -> Node<'buffer> {
+        self.get_node_at_trusted_offset(self.root_offset)
     }
 
     pub fn get_node(&self, id: NodeId) -> Option<Node<'buffer>> {
         self.node_offsets.get(&id)
             .map(|&offset| {
-                self.get_node_at_offset(offset)
-                    .expect("failed to read node at offset found in node_offsets")
+                self.get_node_at_trusted_offset(offset)
+            })
+    }
+
+    pub fn nodes<'a>(&'a self) -> impl Iterator<Item=Node<'buffer>> + Clone + 'a {
+        self.node_offsets.iter()
+            .map(move |(_id, &offset)| {
+                self.get_node_at_trusted_offset(offset)
             })
     }
 }
@@ -448,6 +455,7 @@ fn optional_field<T: fmt::Debug>(dbg: &mut fmt::DebugStruct, label: &str, opt: &
 impl<'b> fmt::Debug for Node<'b> {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         let mut d = fmt.debug_struct("Node");
+        d.field("id", &self.id);
         d.field("coarseType", &self.coarseType);
         optional_field(&mut d, "size", &self.size);
         optional_field(&mut d, "typeName", &self.typeName);
@@ -479,7 +487,7 @@ impl<'b> fmt::Debug for Edge<'b> {
 
 impl fmt::Debug for NodeId {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        self.0.fmt(fmt)
+        write!(fmt, "0x{:x}", self.0)
     }
 }
 
@@ -493,6 +501,12 @@ impl From<u32> for CoarseType {
             4 => CoarseType::DOMNode,
             _ => panic!("bad coarse type value {:?}", n)
         }
+    }
+}
+
+impl From<CoarseType> for String {
+    fn from(c: CoarseType) -> String {
+        format!("{:?}", c)
     }
 }
 

@@ -5,6 +5,7 @@ authors = ["Jim Blandy <jimb@red-bean.com>"]
 
 [dependencies]
 failure = "0.1.2"
+failure_derive = "0.1.2"
 lalrpop-util = "0.15.2"
 memmap = "0.6.2"
 petgraph = "0.4.13"
