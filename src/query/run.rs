@@ -5,7 +5,7 @@ use super::ast::Expr;
 use super::value::{Value, Stream};
 
 impl Expr {
-    pub fn eval<'expr, 'dump: 'expr>(&'expr self, dump: &'dump CoreDump) -> Value<'expr, 'dump> {
+    pub fn eval<'a>(&'a self, dump: &'a CoreDump) -> Value<'a> {
         match self {
             Expr::Number(n) => Value::Number(*n),
             Expr::String(s) => Value::String(s.clone()),
@@ -17,8 +17,7 @@ impl Expr {
     }
 }
 
-fn stream_literal<'expr, 'dump: 'expr>(elts: &'expr Vec<Expr>, dump: &'dump CoreDump)
-                                       -> Stream<'expr, 'dump>
+fn stream_literal<'a>(elts: &'a Vec<Expr>, dump: &'a CoreDump) -> Stream<'a>
 {
     Stream::new(elts.iter().map(move |e| e.eval(dump)))
 }

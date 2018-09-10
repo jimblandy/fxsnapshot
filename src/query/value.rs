@@ -9,19 +9,19 @@ use std::io;
 /// directed by a borrowed portion of the expression, hence the `'expr` lifetime
 /// parameter. Almost certainly, a `Value`
 #[derive(Clone)]
-pub enum Value<'expr, 'dump: 'expr> {
+pub enum Value<'a> {
     Number(u64),
     String(String),
-    Edge(Edge<'dump>),
-    Node(Node<'dump>),
-    Stream(Stream<'expr, 'dump>)
+    Edge(Edge<'a>),
+    Node(Node<'a>),
+    Stream(Stream<'a>)
 }
 
-pub struct Stream<'expr, 'dump: 'expr>(Box<'expr + CloneableStream<'expr, 'dump>>);
+pub struct Stream<'a>(Box<'a + CloneableStream<'a>>);
 
-pub trait CloneableStream<'expr, 'dump> {
-    fn boxed_clone(&self) -> Box<'expr + CloneableStream<'expr, 'dump>>;
-    fn next(&mut self) -> Option<Value<'expr, 'dump>>;
+pub trait CloneableStream<'a> {
+    fn boxed_clone(&self) -> Box<'a + CloneableStream<'a>>;
+    fn next(&mut self) -> Option<Value<'a>>;
 }
 
 /// How to lay out elements of a stream when printed: one per line, or
@@ -36,7 +36,7 @@ enum Orientation {
     Vertical(usize)
 }
 
-impl<'expr, 'dump: 'expr> Value<'expr, 'dump> {
+impl<'a> Value<'a> {
     pub fn top_write(&self, stream: &mut io::Write) -> io::Result<()> {
         self.write(&Orientation::Vertical(0), stream)
     }
@@ -53,10 +53,8 @@ impl<'expr, 'dump: 'expr> Value<'expr, 'dump> {
     }
 }
 
-fn write_stream<'expr, 'dump: 'expr>(stream: Stream<'expr, 'dump>,
-                                     orientation: &Orientation,
-                                     output: &mut io::Write)
-                                     -> io::Result<()>
+fn write_stream<'a>(stream: Stream<'a>, orientation: &Orientation, output: &mut io::Write)
+                    -> io::Result<()>
 {
     match orientation {
         Orientation::Horizontal(indent) => {
@@ -91,36 +89,35 @@ fn write_stream<'expr, 'dump: 'expr>(stream: Stream<'expr, 'dump>,
     Ok(())
 }
 
-impl<'expr, 'dump, I> CloneableStream<'expr, 'dump> for I
-    where 'dump: 'expr,
-          I: 'expr + Iterator<Item=Value<'expr, 'dump>> + Clone
+impl<'a, I> CloneableStream<'a> for I
+    where I: 'a + Iterator<Item=Value<'a>> + Clone
 {
-    fn boxed_clone(&self) -> Box<'expr + CloneableStream<'expr, 'dump>> {
+    fn boxed_clone(&self) -> Box<'a + CloneableStream<'a>> {
         Box::new(self.clone())
     }
 
-    fn next(&mut self) -> Option<Value<'expr, 'dump>> {
+    fn next(&mut self) -> Option<Value<'a>> {
         <Self as Iterator>::next(self)
     }
 }
 
-impl<'expr, 'dump: 'expr> Stream<'expr, 'dump> {
-    pub fn new<I>(iter: I) -> Stream<'expr, 'dump>
-        where I: 'expr + CloneableStream<'expr, 'dump>
+impl<'a> Stream<'a> {
+    pub fn new<I>(iter: I) -> Stream<'a>
+        where I: 'a + CloneableStream<'a>
     {
         Stream(Box::new(iter))
     }
 }
 
-impl<'expr, 'dump: 'expr> Clone for Stream<'expr, 'dump> {
+impl<'a> Clone for Stream<'a> {
     fn clone(&self) -> Self {
         Stream(self.0.boxed_clone())
     }
 }
 
-impl<'expr, 'dump: 'expr> Iterator for Stream<'expr, 'dump> {
-    type Item = Value<'expr, 'dump>;
-    fn next(&mut self) -> Option<Value<'expr, 'dump>> {
+impl<'a> Iterator for Stream<'a> {
+    type Item = Value<'a>;
+    fn next(&mut self) -> Option<Value<'a>> {
         self.0.next()
     }
 }
