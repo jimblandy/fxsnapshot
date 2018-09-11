@@ -41,7 +41,12 @@ pub enum Error {
     NoSuchField { value_type: &'static str, field: String }
 }
 
+/// `Value` implements `TryUnwrap<T>` for each type `T` it can be unwrapped
+/// into.
 pub trait TryUnwrap<T: Sized>: Sized {
+    /// If `self` (which is always a `Value`) holds a `T`, return that as the
+    /// success value. Otherwise, report a type error, using the type of `T` and
+    /// the actual content of `self`
     fn try_unwrap(self) -> Result<T, Error>;
 }
 
