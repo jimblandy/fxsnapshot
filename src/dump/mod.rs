@@ -188,14 +188,14 @@ impl<'buffer> CoreDump<'buffer> {
             self.intern(&edge.EdgeNameOrRef);
         }
 
-        self.scan_frame(&node.allocationStack, offset);
+        self.scan_frame(node.allocationStack.as_ref(), offset);
 
         self.intern(&node.JSObjectClassNameOrRef);
         self.intern(&node.ScriptFilenameOrRef);
         self.intern(&node.descriptiveTypeNameOrRef);
     }
 
-    fn scan_frame(&mut self, mut frame: &Option<protobuf::StackFrame<'buffer>>, offset: usize) {
+    fn scan_frame(&mut self, mut frame: Option<&protobuf::StackFrame<'buffer>>, offset: usize) {
         use self::mozilla::devtools::protobuf::mod_StackFrame::OneOfStackFrameType;
         while let Some(protobuf::StackFrame { StackFrameType: OneOfStackFrameType::data(data) }) = frame {
             if let Some(id) = data.id {
@@ -204,7 +204,7 @@ impl<'buffer> CoreDump<'buffer> {
 
             self.intern(&data.SourceOrRef);
             self.intern(&data.FunctionDisplayNameOrRef);
-            frame = &data.parent;
+            frame = data.parent.as_ref().map(|r| &**r);
         }
     }
 }

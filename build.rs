@@ -11,6 +11,7 @@ fn main() {
         single_module: false,
         import_search_path: vec![PathBuf::from("src/dump")],
         no_output: false,
+        error_cycle: true,
     };
 
     FileDescriptor::write_proto(&config)

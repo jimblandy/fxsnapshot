@@ -9,13 +9,18 @@ failure_derive = "0.1.2"
 lalrpop-util = "0.15.2"
 memmap = "0.6.2"
 petgraph = "0.4.13"
-quick-protobuf = { path = "/home/jimb/rust/quick-protobuf/quick-protobuf" }
 regex = "0.2.0"
 
 [dependencies.fallible-iterator]
 git = "https://github.com/jimblandy/rust-fallible-iterator.git"
 rev = "fallible-closures"
 
+[dependencies.quick-protobuf]
+git = "https://github.com/tafia/quick-protobuf.git"
+
 [build-dependencies]
 lalrpop = "0.15.2"
-pb-rs = { path = "/home/jimb/rust/quick-protobuf/pb-rs" }
+
+[build-dependencies.pb-rs]
+git = "https://github.com/tafia/quick-protobuf.git"
+
