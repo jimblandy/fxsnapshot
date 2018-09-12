@@ -1,5 +1,7 @@
 #![allow(unused_variables, dead_code)]
 
+use fallible_iterator::{self, FallibleIterator};
+
 use dump::{CoreDump, Node};
 use super::ast::{Expr, NullaryOp, UnaryOp, StreamBinaryOp, Predicate};
 use super::value::{self, EvalResult, Value, Stream, TryUnwrap};
@@ -19,7 +21,9 @@ impl Expr {
 
 fn stream_literal<'a>(elts: &'a Vec<Expr>, dump: &'a CoreDump) -> Stream<'a>
 {
-    Stream::new(elts.iter().map(move |e| e.eval(dump)))
+    let iter = elts.iter().map(move |e| e.eval(dump));
+    let iter = fallible_iterator::convert(iter);
+    Stream::new(iter)
 }
 
 impl NullaryOp {
@@ -28,6 +32,7 @@ impl NullaryOp {
             NullaryOp::Root => Ok(dump.get_root().into()),
             NullaryOp::Nodes => {
                 let iter = dump.nodes().map(|n| Ok(n.into()));
+                let iter = fallible_iterator::convert(iter);
                 Ok(Stream::new(iter).into())
             }
         }
@@ -40,8 +45,8 @@ impl UnaryOp {
         match self {
             UnaryOp::First => {
                 let mut stream: Stream<'a> = value.try_unwrap()?;
-                match stream.next() {
-                    Some(v) => Ok(v?),
+                match stream.next()? {
+                    Some(v) => Ok(v),
                     None => Err(value::Error::EmptyStream),
                 }
             }
@@ -49,6 +54,7 @@ impl UnaryOp {
                 let node: Node<'a> = value.try_unwrap()?;
                 let iter = node.edges.clone().into_iter()
                     .map(|e| Ok(e.into()));
+                let iter = fallible_iterator::convert(iter);
                 Ok(Stream::new(iter).into())
             }
             UnaryOp::Paths => unimplemented!("UnaryOp::Paths"),
@@ -65,16 +71,7 @@ impl StreamBinaryOp {
         match self {
             StreamBinaryOp::Find => unimplemented!("StreamBinaryOp::Find"),
             StreamBinaryOp::Filter => {
-                let iter = stream.filter_map(move |result| {
-                    match result {
-                        Err(e) => Some(Err(e)),
-                        Ok(v) => match predicate.eval(&v, dump) {
-                            Err(e) => Some(Err(e)),
-                            Ok(true) => Some(Ok(v)),
-                            Ok(false) => None,
-                        }
-                    }
-                });
+                let iter = stream.filter(move |item| predicate.eval(&item, dump));
                 Ok(Value::Stream(Stream::new(iter)))
             }
             StreamBinaryOp::Until => unimplemented!("StreamBinaryOp::Until"),

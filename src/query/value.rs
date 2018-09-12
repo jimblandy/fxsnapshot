@@ -1,6 +1,8 @@
 use dump::{Edge, Node};
 use failure;
 
+use fallible_iterator::FallibleIterator;
+
 use std::cmp::PartialEq;
 use std::io;
 
@@ -26,7 +28,7 @@ pub struct Stream<'a>(Box<'a + CloneableStream<'a>>);
 
 pub trait CloneableStream<'a> {
     fn boxed_clone(&self) -> Box<'a + CloneableStream<'a>>;
-    fn next(&mut self) -> Option<EvalResult<'a>>;
+    fn cs_next(&mut self) -> Result<Option<Value<'a>>, Error>;
 }
 
 #[derive(Fail, Debug)]
@@ -93,7 +95,7 @@ impl<'a> Value<'a> {
     }
 }
 
-fn write_stream<'a>(stream: Stream<'a>, orientation: &Orientation, output: &mut io::Write)
+fn write_stream<'a>(mut stream: Stream<'a>, orientation: &Orientation, output: &mut io::Write)
                     -> Result<(), failure::Error>
 {
     match orientation {
@@ -103,8 +105,7 @@ fn write_stream<'a>(stream: Stream<'a>, orientation: &Orientation, output: &mut 
             let nested_orientation = Orientation::Vertical(indent + 4);
             write!(output, "[ ")?;
             let mut first = true;
-            for result in stream {
-                let value = result?;
+            while let Some(value) = stream.next()? {
                 if !first {
                     write!(output, " ")?;
                 }
@@ -119,8 +120,7 @@ fn write_stream<'a>(stream: Stream<'a>, orientation: &Orientation, output: &mut 
             let nested_orientation = Orientation::Horizontal(*indent);
 
             write!(output, "[\n")?;
-            for result in stream {
-                let value = result?;
+            while let Some(value) = stream.next()? {
                 write!(output, "{:1$}", "", indent)?;
                 value.write(&nested_orientation, output)?;
                 write!(output, "\n")?;
@@ -183,14 +183,14 @@ impl_value_variant!(Node<'a>, Node, "node");
 impl_value_variant!(Stream<'a>, Stream, "stream");
 
 impl<'a, I> CloneableStream<'a> for I
-    where I: 'a + Iterator<Item=EvalResult<'a>> + Clone
+    where I: 'a + FallibleIterator<Item=Value<'a>, Error=Error> + Clone
 {
     fn boxed_clone(&self) -> Box<'a + CloneableStream<'a>> {
         Box::new(self.clone())
     }
 
-    fn next(&mut self) -> Option<EvalResult<'a>> {
-        <Self as Iterator>::next(self)
+    fn cs_next(&mut self) -> Result<Option<Value<'a>>, Error> {
+        <Self as FallibleIterator>::next(self)
     }
 }
 
@@ -208,9 +208,10 @@ impl<'a> Clone for Stream<'a> {
     }
 }
 
-impl<'a> Iterator for Stream<'a> {
-    type Item = EvalResult<'a>;
-    fn next(&mut self) -> Option<EvalResult<'a>> {
-        self.0.next()
+impl<'a> FallibleIterator for Stream<'a> {
+    type Item = Value<'a>;
+    type Error = Error;
+    fn next(&mut self) -> Result<Option<Value<'a>>, Error> {
+        self.0.cs_next()
     }
 }
