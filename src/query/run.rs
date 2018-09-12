@@ -2,7 +2,7 @@
 
 use fallible_iterator::{self, FallibleIterator};
 
-use dump::{CoreDump, Node};
+use dump::{CoreDump, Edge, Node};
 use super::ast::{Expr, NullaryOp, UnaryOp, StreamBinaryOp, Predicate};
 use super::value::{self, EvalResult, Value, Stream, TryUnwrap};
 
@@ -95,7 +95,12 @@ impl Predicate {
                             None => Ok(false),
                         }
                     }
-                    Value::Edge(node) => unimplemented!("edge field predicates"),
+                    Value::Edge(edge) => {
+                        match get_edge_field(edge, name)? {
+                            Some(field) => predicate.eval(&field, dump),
+                            None => Ok(false),
+                        }
+                    }
                     _ => Err(value::Error::Type {
                         expected: "node or edge",
                         actual: operand.type_name()
@@ -122,6 +127,19 @@ fn get_node_field<'v>(node: &'v Node, field: &str)
         "descriptiveTypeName" => node.descriptiveTypeName.map(|t| t.to_string().into()),
         _ => return Err(value::Error::NoSuchField {
             value_type: "nodes",
+            field: field.into()
+        }),
+    })
+}
+
+fn get_edge_field<'v>(edge: &'v Edge, field: &str)
+                      -> Result<Option<Value<'v>>, value::Error>
+{
+    Ok(match field {
+        "referent" => edge.referent.map(|id| Value::from(id.0)),
+        "name" => edge.name.map(|n| n.to_string().into()),
+        _ => return Err(value::Error::NoSuchField {
+            value_type: "edges",
             field: field.into()
         }),
     })

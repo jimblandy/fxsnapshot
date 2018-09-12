@@ -121,6 +121,7 @@ mapping them into memory.
 
 ### TODO
 
+- trait for structs from which we can fetch fields by name?
 - specify our own trait for formatting values?
 - Use From<&[u8]> instead of FromDumpBytes?
 - static type checking
