@@ -457,7 +457,6 @@ impl<'b> fmt::Debug for Node<'b> {
         let mut d = fmt.debug_struct("Node");
         d.field("id", &self.id);
         d.field("coarseType", &self.coarseType);
-        optional_field(&mut d, "size", &self.size);
         optional_field(&mut d, "typeName", &self.typeName);
         optional_field(&mut d, "size", &self.size);
         optional_field(&mut d, "JSObjectClassName", &self.JSObjectClassName);
