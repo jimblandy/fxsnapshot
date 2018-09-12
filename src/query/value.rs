@@ -22,6 +22,8 @@ pub enum Value<'a> {
     Stream(Stream<'a>)
 }
 
+/// The result of evaluating an expression: either a value, or a
+/// [`value::Error`](#type.Error).
 pub type EvalResult<'a> = Result<Value<'a>, Error>;
 
 pub struct Stream<'a>(Box<'a + CloneableStream<'a>>);
@@ -31,14 +33,18 @@ pub trait CloneableStream<'a> {
     fn cs_next(&mut self) -> Result<Option<Value<'a>>, Error>;
 }
 
+/// An error raised during expression evaluation.
 #[derive(Fail, Debug)]
 pub enum Error {
+    /// Type mismatch.
     #[fail(display = "expected type {}, got {}", expected, actual)]
     Type { actual: &'static str, expected: &'static str },
 
+    /// Trying to draw a value (`first`, etc.) from an empty stream.
     #[fail(display = "stream produced no values")]
     EmptyStream,
 
+    /// Matching on a non-existent Node or Edge field.
     #[fail(display = "{} have no field named {}", value_type, field)]
     NoSuchField { value_type: &'static str, field: String }
 }
