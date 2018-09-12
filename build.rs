@@ -13,10 +13,12 @@ fn main() {
         no_output: false,
         error_cycle: true,
     };
-
     FileDescriptor::write_proto(&config)
         .expect("failed to generate CoreDump.rs from CoreDump.proto");
+    println!("cargo:rerun-if-changed=src/dump/CoreDump.proto");
 
-    lalrpop::process_root()
+    lalrpop::Configuration::new()
+        .process_file("src/query/grammar.lalrpop")
         .expect("failed to generate parser");
+    println!("cargo:rerun-if-changed=src/query/grammar.lalrpop");
 }
