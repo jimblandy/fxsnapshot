@@ -1,8 +1,10 @@
+//! A query expression, syntactically well-formed.
 #[derive(Clone, Debug)]
 pub enum Expr {
     Number(u64),
     String(String),
     StreamLiteral(Vec<Expr>),
+
     Nullary(NullaryOp),
     Unary(UnaryOp, Box<Expr>),
     Stream(StreamBinaryOp, Box<Expr>, Predicate),
