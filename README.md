@@ -121,7 +121,21 @@ mapping them into memory.
 
 ### TODO
 
-- trait for structs from which we can fetch fields by name?
-- specify our own trait for formatting values?
-- Use From<&[u8]> instead of FromDumpBytes?
-- static type checking
+- [ ] separate representation for planned evaluation
+- [ ] optimize `nodes { id: ... }`
+- [ ] Change `Stream<'a>` to `Stream<T>`, make `Stream` independent?
+- [ ] Change `TryUnwrap` to `FromValue`? so you'd write `Stream<'a>::from_value`?
+- [ ] can we specialize some plans to the value types they produce?
+- [ ] closures and variables
+- [ ] Can EqualPredicate cache its given value? (A 'once_cache' in the lexical environment?)
+- [ ] definitions
+- [ ] file input
+- [ ] static type checking
+  - [ ] explicit types on closure arguments
+  - [ ] homogeneous streams
+- [ ] source positions
+- [ ] specialize to avoid dynamic dispatch for constants and variable references
+      (once we can actually write code large enough to benchmark)
+- [ ] trait for structs from which we can fetch fields by name?
+- [ ] specify our own trait for formatting values?
+- [ ] Use From<&[u8]> instead of FromDumpBytes?
