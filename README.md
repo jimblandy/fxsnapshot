@@ -109,8 +109,8 @@ directory. This is a gzipped protobuf stream, of the format defined in
 This program operates only on decompressed snapshots, so you'll need to
 decompress it first:
 
-    $ mv /tmp/131196117.fxsnapshot ~/today.fxsnapshot
-    $ gunzip < today.fxsnapshot > today.fxsnapshot.pb
+    $ mv /tmp/131196117.fxsnapshot ~/today.fxsnapshot.gz
+    $ gunzip today.fxsnapshot.gz
 
 ### Next steps
 
