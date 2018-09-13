@@ -39,6 +39,7 @@ fn run() -> Result<(), Error> {
     let query_text = args[1].to_string_lossy().into_owned();
     let query = query::ExprParser::new().parse(&query_text)
         .map_err(|e| format_err!("{}", e))?;
+    let plan = query::plan_expr(&query);
 
     let path = Path::new(&args[0]);
     let file = File::open(path)
@@ -47,9 +48,10 @@ fn run() -> Result<(), Error> {
     let bytes = &mmap[..];
 
     let dump = CoreDump::new(path, bytes)?;
+    let dye = query::DynEnv { dump: &dump };
 
     let stdout = std::io::stdout();
-    query.eval(&dump)?.top_write(&mut stdout.lock())?;
+    plan.run(&dye)?.top_write(&mut stdout.lock())?;
     println!();
 
     Ok(())

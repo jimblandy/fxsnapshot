@@ -1,3 +1,10 @@
+//! Types representing query execution strategies.
+//!
+//! The [`plan_expr`][pe] function takes an `Expr` and produces a `Plan` for
+//! evaluating it.
+//!
+//! [pe]: fn.plan_expr.html
+
 #![allow(unused_variables, dead_code)]
 
 use fallible_iterator::{self, FallibleIterator};
@@ -6,111 +13,178 @@ use dump::{CoreDump, Edge, Node};
 use super::ast::{Expr, NullaryOp, UnaryOp, StreamBinaryOp, Predicate};
 use super::value::{self, EvalResult, Value, Stream, TryUnwrap};
 
-impl Expr {
-    pub fn eval<'a>(&'a self, dump: &'a CoreDump) -> EvalResult<'a> {
-        match self {
-            Expr::Number(n) => Ok((*n).into()),
-            Expr::String(s) => Ok(s.clone().into()),
-            Expr::StreamLiteral(elts) => Ok(stream_literal(elts, dump).into()),
-            Expr::Nullary(n) => n.eval(dump),
-            Expr::Unary(op, e) => op.eval(e, dump),
-            Expr::Stream(op, s, p) => op.eval(s, p, dump),
+/// A plan of evaluation. We translate each query expression into a tree of
+/// `Plan` values, which serve as the code for a sort of indirect-threaded
+/// interpreter.
+pub trait Plan {
+    /// Evaluate code for some expression, yielding either a `T` value or an
+    /// error. Consult `DynEnv` for random contextual information like the
+    /// current `CoreDump`.
+    fn run<'a>(&'a self, dye: &'a DynEnv<'a>) -> EvalResult<'a>;
+}
+
+/// A plan for evaluating a predicate on a `Value`.
+pub trait PredicatePlan {
+    /// Determine whether this predicate matches `value`. Consult `DynEnv` for
+    /// random contextual information like the current `CoreDump`.
+    fn test<'a>(&'a self, dye: &'a DynEnv<'a>, &Value<'a>) -> Result<bool, value::Error>;
+}
+
+pub struct DynEnv<'a> {
+    pub dump: &'a CoreDump<'a>
+}
+
+/// Given the expression `expr`, return a `Plan` that will evaluate it.
+pub fn plan_expr(expr: &Expr) -> Box<Plan> {
+    match expr {
+        Expr::Number(n) => Box::new(Const(*n)),
+        Expr::String(s) => Box::new(Const(s.clone())),
+        Expr::StreamLiteral(elts) => {
+            Box::new(StreamLiteral(elts.iter().map(plan_expr).collect()))
         }
+        Expr::Nullary(op) => plan_nullary(op),
+        Expr::Unary(op, expr) => plan_unary(op, expr),
+        Expr::Stream(op, stream, predicate) => plan_stream(op, stream, predicate),
     }
 }
 
-fn stream_literal<'a>(elts: &'a Vec<Expr>, dump: &'a CoreDump) -> Stream<'a>
+fn plan_nullary(op: &NullaryOp) -> Box<Plan> {
+    match op {
+        NullaryOp::Root => Box::new(Root),
+        NullaryOp::Nodes => Box::new(Nodes),
+    }
+}
+
+fn plan_unary(op: &UnaryOp, expr: &Expr) -> Box<Plan> {
+    let expr_plan = plan_expr(expr);
+    match op {
+        UnaryOp::First => Box::new(First(expr_plan)),
+        UnaryOp::Edges => Box::new(Edges(expr_plan)),
+        UnaryOp::Paths => unimplemented!("UnaryOp::Paths"),
+    }
+}
+
+fn plan_stream(op: &StreamBinaryOp, stream: &Expr, predicate: &Predicate) -> Box<Plan> {
+    let stream = plan_expr(stream);
+    let predicate = plan_predicate(predicate);
+    match op {
+        StreamBinaryOp::Find => unimplemented!("StreamBinaryOp::Find"),
+        StreamBinaryOp::Filter => Box::new(Filter { stream, predicate }),
+        StreamBinaryOp::Until => unimplemented!("StreamBinaryOp::Until"),
+    }
+}
+
+fn plan_predicate(predicate: &Predicate) -> Box<PredicatePlan> {
+    match predicate {
+        Predicate::Expr(expr) => Box::new(EqualPredicate(plan_expr(expr))),
+        Predicate::Field(field_name, predicate) =>
+            Box::new(FieldPredicate {
+                field_name: field_name.clone(),
+                predicate: plan_predicate(predicate)
+            }),
+        Predicate::And(_) => unimplemented!("Predicate::And"),
+        Predicate::Or(_) => unimplemented!("Predicate::Or"),
+        Predicate::Not(_) => unimplemented!("Predicate::Not"),
+    }
+}
+
+struct Const<T>(T);
+
+impl<T> Plan for Const<T>
+    where T: Clone,
+          for<'a> Value<'a>: From<T>
 {
-    let iter = elts.iter().map(move |e| e.eval(dump));
-    let iter = fallible_iterator::convert(iter);
-    Stream::new(iter)
+    fn run<'a>(&'a self, dye: &'a DynEnv<'a>) -> EvalResult<'a> {
+        Ok(Value::from(self.0.clone()))
+    }
 }
 
-impl NullaryOp {
-    pub fn eval<'a>(&'a self, dump: &'a CoreDump) -> EvalResult<'a> {
-        match self {
-            NullaryOp::Root => Ok(dump.get_root().into()),
-            NullaryOp::Nodes => {
-                let iter = dump.nodes().map(|n| Ok(n.into()));
-                let iter = fallible_iterator::convert(iter);
-                Ok(Stream::new(iter).into())
-            }
+struct StreamLiteral(Vec<Box<Plan>>);
+
+impl Plan for StreamLiteral {
+    fn run<'a>(&'a self, dye: &'a DynEnv<'a>) -> EvalResult<'a> {
+        let iter = fallible_iterator::convert(self.0.iter().map(move |p| { p.run(dye) }));
+        Ok(Value::from(Stream::new(iter)))
+    }
+}
+
+struct First(Box<Plan>);
+impl Plan for First {
+    fn run<'a>(&'a self, dye: &'a DynEnv<'a>) -> EvalResult<'a> {
+        let value = self.0.run(dye)?;
+        let mut stream: Stream<'a> = value.try_unwrap()?;
+        match stream.next()? {
+            Some(v) => Ok(v),
+            None => Err(value::Error::EmptyStream),
         }
     }
 }
 
-impl UnaryOp {
-    pub fn eval<'a>(&'a self, operand: &'a Expr, dump: &'a CoreDump) -> EvalResult<'a> {
-        let value = operand.eval(dump)?;
-        match self {
-            UnaryOp::First => {
-                let mut stream: Stream<'a> = value.try_unwrap()?;
-                match stream.next()? {
-                    Some(v) => Ok(v),
-                    None => Err(value::Error::EmptyStream),
-                }
-            }
-            UnaryOp::Edges => {
-                let node: Node<'a> = value.try_unwrap()?;
-                let iter = node.edges.clone().into_iter()
-                    .map(|e| Ok(e.into()));
-                let iter = fallible_iterator::convert(iter);
-                Ok(Stream::new(iter).into())
-            }
-            UnaryOp::Paths => unimplemented!("UnaryOp::Paths"),
-        }
+struct Root;
+impl Plan for Root {
+    fn run<'a>(&'a self, dye: &'a DynEnv<'a>) -> EvalResult<'a> {
+        Ok(Value::from(dye.dump.get_root()))
     }
 }
 
-impl StreamBinaryOp {
-    pub fn eval<'a>(&'a self, stream_expr: &'a Expr, predicate: &'a Predicate, dump: &'a CoreDump)
-        -> EvalResult<'a>
-    {
-        let stream: Stream = stream_expr.eval(dump)?.try_unwrap()?;
-
-        match self {
-            StreamBinaryOp::Find => unimplemented!("StreamBinaryOp::Find"),
-            StreamBinaryOp::Filter => {
-                let iter = stream.filter(move |item| predicate.eval(&item, dump));
-                Ok(Value::Stream(Stream::new(iter)))
-            }
-            StreamBinaryOp::Until => unimplemented!("StreamBinaryOp::Until"),
-        }
+struct Nodes;
+impl Plan for Nodes {
+    fn run<'a>(&'a self, dye: &'a DynEnv<'a>) -> EvalResult<'a> {
+        let iter = fallible_iterator::convert(dye.dump.nodes().map(|n| Ok(n.into())));
+        Ok(Value::from(Stream::new(iter)))
     }
 }
 
-impl Predicate {
-    pub fn eval(&self, operand: &Value, dump: &CoreDump) -> Result<bool, value::Error>
-    {
-        match self {
-            Predicate::Expr(e) => {
-                let rhs = e.eval(dump)?;
-                Ok(*operand == rhs)
+struct Edges(Box<Plan>);
+impl Plan for Edges {
+    fn run<'a>(&'a self, dye: &'a DynEnv<'a>) -> EvalResult<'a> {
+        let value = self.0.run(dye)?;
+        let node: Node = value.try_unwrap()?;
+        let iter = node.edges.clone().into_iter().map(|e| Ok(e.into()));
+        let iter = fallible_iterator::convert(iter);
+        Ok(Stream::new(iter).into())
+    }
+}
+
+struct Filter {
+    stream: Box<Plan>,
+    predicate: Box<PredicatePlan>,
+}
+impl Plan for Filter {
+    fn run<'a>(&'a self, dye: &'a DynEnv<'a>) -> EvalResult<'a> {
+        let value = self.stream.run(dye)?;
+        let stream: Stream = value.try_unwrap()?;
+        let iter = stream.filter(move |item| self.predicate.test(&dye, item));
+        Ok(Value::from(Stream::new(iter)))
+    }
+}
+
+struct EqualPredicate(Box<Plan>);
+impl PredicatePlan for EqualPredicate {
+    fn test<'a>(&'a self, dye: &'a DynEnv<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
+        let given = self.0.run(dye)?;
+        Ok(*value == given)
+    }
+}
+
+struct FieldPredicate {
+    field_name: String,
+    predicate: Box<PredicatePlan>,
+}
+impl PredicatePlan for FieldPredicate {
+    fn test<'a>(&'a self, dye: &'a DynEnv<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
+        let field = match value {
+            Value::Node(node) => get_node_field(node, &self.field_name)?,
+            Value::Edge(edge) => get_edge_field(edge, &self.field_name)?,
+            _ => {
+                return Err(value::Error::Type {
+                    expected: "node or edge",
+                    actual: value.type_name()
+                });
             }
-            Predicate::Field(name, predicate) => {
-                match operand {
-                    Value::Node(node) => {
-                        match get_node_field(node, name)? {
-                            Some(field) => predicate.eval(&field, dump),
-                            None => Ok(false),
-                        }
-                    }
-                    Value::Edge(edge) => {
-                        match get_edge_field(edge, name)? {
-                            Some(field) => predicate.eval(&field, dump),
-                            None => Ok(false),
-                        }
-                    }
-                    _ => Err(value::Error::Type {
-                        expected: "node or edge",
-                        actual: operand.type_name()
-                    }),
-                }
-            }
-            Predicate::And(_) => unimplemented!("Predicate::And"),
-            Predicate::Or(_) => unimplemented!("Predicate::Or"),
-            Predicate::Not(_) => unimplemented!("Predicate::Not"),
-        }
+        };
+        field.map_or(Ok(false),
+                     |field_value| self.predicate.test(dye, &field_value))
     }
 }
 
