@@ -34,7 +34,7 @@ pub trait CloneableStream<'a> {
 }
 
 /// An error raised during expression evaluation.
-#[derive(Fail, Debug)]
+#[derive(Clone, Fail, Debug)]
 pub enum Error {
     /// Type mismatch.
     #[fail(display = "expected type {}, got {}", expected, actual)]

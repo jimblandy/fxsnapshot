@@ -1,7 +1,6 @@
 Git is the backtrace; this is the continuation.
 
 * small
-- [ ] optimize `nodes { id: ... }`
 - [ ] implement `paths` operator
 - [ ] publish as crate
   - [ ] publish new fallible-iterator

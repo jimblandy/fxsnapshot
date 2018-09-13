@@ -9,7 +9,7 @@
 
 use fallible_iterator::{self, FallibleIterator};
 
-use dump::{CoreDump, Edge, Node};
+use dump::{CoreDump, Edge, Node, NodeId};
 use super::ast::{Expr, NullaryOp, UnaryOp, StreamBinaryOp, Predicate};
 use super::value::{self, EvalResult, Value, Stream, TryUnwrap};
 
@@ -65,13 +65,111 @@ fn plan_unary(op: &UnaryOp, expr: &Expr) -> Box<Plan> {
 }
 
 fn plan_stream(op: &StreamBinaryOp, stream: &Expr, predicate: &Predicate) -> Box<Plan> {
-    let stream = plan_expr(stream);
-    let predicate = plan_predicate(predicate);
+    //let stream_plan = plan_expr(stream);
+    //let predicate_plan = plan_predicate(predicate);
     match op {
         StreamBinaryOp::Find => unimplemented!("StreamBinaryOp::Find"),
-        StreamBinaryOp::Filter => Box::new(Filter { stream, predicate }),
+        StreamBinaryOp::Filter => plan_filter(stream, predicate),
         StreamBinaryOp::Until => unimplemented!("StreamBinaryOp::Until"),
     }
+}
+
+fn plan_filter(stream: &Expr, predicate: &Predicate) -> Box<Plan> {
+    // Implement `nodes { id: ... }` using `NodesById`, rather than a linear
+    // search over all nodes.
+    if let Expr::Nullary(NullaryOp::Nodes) = stream {
+        // Does the predicate include a required match for a specific node
+        // identifier?
+        if let Some((id, remainder)) = find_predicate_required_id(predicate) {
+            // Efficiently produce a (zero- or one-element) stream of nodes with
+            // the given id.
+            let nodes = Box::new(NodesById(plan_expr(id)));
+            if let Some(remainder) = remainder {
+                // Apply whatever parts of the predicate remain.
+                return Box::new(Filter {
+                    stream: nodes,
+                    predicate: plan_predicate(&remainder)
+                });
+            } else {
+                // The predicate contains only an id filter, so `NodesById` is
+                // all we need for the entire filter expression.
+                return nodes;
+            };
+        }
+    }
+
+    // We can't use NodesById, so just generate a normal filter expression.
+    return Box::new(Filter {
+        stream: plan_expr(stream),
+        predicate: plan_predicate(predicate)
+    });
+}
+
+/// If `predicate` only admits `Node`s whose id is equal to a specific
+/// expression, then return that expression, together with a new `Predicate`
+/// representing the parts of `predicate` other than the `id`.
+///
+/// Note that if we do have to construct a remainder predicate, it must be
+/// constructed afresh, since we can't modify the predicate we were handed.
+/// Since we use `Box` and not `Rc` in our parse tree, this could end up copying
+/// a lot if the remainder predicate is large.
+fn find_predicate_required_id(predicate: &Predicate)
+                              -> Option<(&Expr, Option<Predicate>)>
+{
+    match predicate {
+        Predicate::Field(name, id_predicate) if name == "id" => {
+            if let Predicate::Expr(id_expr) = &**id_predicate {
+                return Some((id_expr, None));
+            }
+        }
+
+        Predicate::And(predicates) => {
+            // Conjunctions should always have at least two elements.
+            assert!(predicates.len() >= 2);
+
+            // Search the sub-predicates of this conjunction for one that
+            // requires a specific id.
+            if let Some((i, id, child_remainder)) = predicates.iter()
+                .enumerate()
+                .find_map(|(i, p)| {
+                    find_predicate_required_id(p)
+                        .map(|(id, child_remainder)| (i, id, child_remainder))
+                })
+            {
+                if let Some(child_remainder) = child_remainder {
+                    // predicates[i] requires a specific id. We've hoisted
+                    // out the id expression, so replace predicates[i] with
+                    // the remainder.
+                    //
+                    // If this clone gets expensive, we should probably
+                    // start using `Rc` instead of `Box` in the AST.
+                    let mut remainder = predicates.clone();
+                    remainder[i] = child_remainder;
+                    return Some((id, Some(Predicate::And(remainder))));
+                } else {
+                    // predicates[i] requires a specific id, with no remainder
+                    // predicate. Just drop predicates[i] from the conjunction
+                    // altogether.
+
+                    // Avoid creating a single-element conjunction.
+                    if predicates.len() == 2 {
+                        return Some((id, Some(predicates[1-i].clone())));
+                    }
+
+                    let mut remainder = predicates.clone();
+                    remainder.remove(i);
+                    return Some((id, Some(Predicate::And(remainder))));
+                }
+            }
+        }
+
+        // We could also look into conjunctions, to see if any sub-predicate
+        // requires a specific id. The nice code for this uses find_map, which
+        // isn't stable yet.
+        _ => ()
+    }
+
+    None
 }
 
 fn plan_predicate(predicate: &Predicate) -> Box<PredicatePlan> {
@@ -131,6 +229,17 @@ struct Nodes;
 impl Plan for Nodes {
     fn run<'a>(&'a self, dye: &'a DynEnv<'a>) -> EvalResult<'a> {
         let iter = fallible_iterator::convert(dye.dump.nodes().map(|n| Ok(n.into())));
+        Ok(Value::from(Stream::new(iter)))
+    }
+}
+
+struct NodesById(Box<Plan>);
+impl Plan for NodesById {
+    fn run<'a>(&'a self, dye: &'a DynEnv<'a>) -> EvalResult<'a> {
+        let value = self.0.run(dye)?;
+        let id = NodeId(value.try_unwrap()?);
+        let optional_node = dye.dump.get_node(id).map(|on| Ok(Value::from(on)));
+        let iter = fallible_iterator::convert(optional_node.into_iter());
         Ok(Value::from(Stream::new(iter)))
     }
 }
