@@ -13,18 +13,19 @@ failure_derive = "0.1.2"
 lalrpop-util = "0.16.0"
 memmap = "0.6.2"
 petgraph = "0.4.13"
-regex = "0.2.0"
+regex = "1.0"
 
 [dependencies.fallible-iterator]
-git = "https://github.com/jimblandy/rust-fallible-iterator.git"
-rev = "fallible-closures"
+git = "https://github.com/sfackler/rust-fallible-iterator.git"
+rev = "11ea3bf0e6ad2bc4f4fe220d6c3332942e5dfa35"
 
 [dependencies.quick-protobuf]
 git = "https://github.com/tafia/quick-protobuf.git"
+rev = "a5397610b2d18203b7265f39dba9ec111f45bcf4"
 
 [build-dependencies]
 lalrpop = "0.16.0"
 
 [build-dependencies.pb-rs]
 git = "https://github.com/tafia/quick-protobuf.git"
-
+rev = "a5397610b2d18203b7265f39dba9ec111f45bcf4"
