@@ -5,8 +5,6 @@
 //!
 //! [pe]: fn.plan_expr.html
 
-#![allow(unused_variables, dead_code)]
-
 use fallible_iterator::{self, FallibleIterator};
 
 use dump::{CoreDump, Edge, Node, NodeId};
@@ -192,7 +190,7 @@ impl<T> Plan for Const<T>
     where T: Clone,
           for<'a> Value<'a>: From<T>
 {
-    fn run<'a>(&'a self, dye: &'a DynEnv<'a>) -> EvalResult<'a> {
+    fn run<'a>(&'a self, _dye: &'a DynEnv<'a>) -> EvalResult<'a> {
         Ok(Value::from(self.0.clone()))
     }
 }
