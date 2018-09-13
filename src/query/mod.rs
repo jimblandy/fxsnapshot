@@ -46,9 +46,12 @@
 //! [plan](run/trait.Plan.html)
 //! [value](value/enum.Value.html)
 mod ast;
-mod grammar;
 mod run;
 mod value;
+
+mod grammar {
+    include!(concat!(env!("OUT_DIR"), "/query/grammar.rs"));
+}
 
 pub use self::ast::Expr;
 pub use self::grammar::ExprParser;

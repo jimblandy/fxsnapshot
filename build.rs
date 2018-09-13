@@ -31,6 +31,7 @@ fn main() {
         .expect("error writing to generated.rs from build.rs");
 
     lalrpop::Configuration::new()
+        .use_cargo_dir_conventions()
         .process_file("src/query/grammar.lalrpop")
         .expect("failed to generate parser");
     println!("cargo:rerun-if-changed=src/query/grammar.lalrpop");
