@@ -236,9 +236,9 @@ dependencies = [
  "lalrpop 0.16.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "lalrpop-util 0.16.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "memmap 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "pb-rs 0.4.1 (git+https://github.com/tafia/quick-protobuf.git?rev=a5397610b2d18203b7265f39dba9ec111f45bcf4)",
+ "pb-rs 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "petgraph 0.4.13 (registry+https://github.com/rust-lang/crates.io-index)",
- "quick-protobuf 0.6.3 (git+https://github.com/tafia/quick-protobuf.git?rev=a5397610b2d18203b7265f39dba9ec111f45bcf4)",
+ "quick-protobuf 0.6.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "regex 1.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -395,8 +395,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "pb-rs"
-version = "0.4.1"
-source = "git+https://github.com/tafia/quick-protobuf.git?rev=a5397610b2d18203b7265f39dba9ec111f45bcf4#a5397610b2d18203b7265f39dba9ec111f45bcf4"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "clap 2.32.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "env_logger 0.5.13 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -461,7 +461,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "quick-protobuf"
 version = "0.6.3"
-source = "git+https://github.com/tafia/quick-protobuf.git?rev=a5397610b2d18203b7265f39dba9ec111f45bcf4#a5397610b2d18203b7265f39dba9ec111f45bcf4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "byteorder 1.2.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "failure 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -851,7 +851,7 @@ dependencies = [
 "checksum new_debug_unreachable 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)" = "0cdc457076c78ab54d5e0d6fa7c47981757f1e34dc39ff92787f217dede586c4"
 "checksum nom 3.2.1 (registry+https://github.com/rust-lang/crates.io-index)" = "05aec50c70fd288702bcd93284a8444607f3292dbdf2a30de5ea5dcdbe72287b"
 "checksum ordermap 0.3.5 (registry+https://github.com/rust-lang/crates.io-index)" = "a86ed3f5f244b372d6b1a00b72ef7f8876d0bc6a78a4c9985c53614041512063"
-"checksum pb-rs 0.4.1 (git+https://github.com/tafia/quick-protobuf.git?rev=a5397610b2d18203b7265f39dba9ec111f45bcf4)" = "<none>"
+"checksum pb-rs 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)" = "3e76cd462e6a255a73d1da15ebb7cb99331716fdff5f888f5c911005992c2ec3"
 "checksum petgraph 0.4.13 (registry+https://github.com/rust-lang/crates.io-index)" = "9c3659d1ee90221741f65dd128d9998311b0e40c5d3c23a62445938214abce4f"
 "checksum phf_generator 0.7.23 (registry+https://github.com/rust-lang/crates.io-index)" = "03dc191feb9b08b0dc1330d6549b795b9d81aec19efe6b4a45aec8d4caee0c4b"
 "checksum phf_shared 0.7.23 (registry+https://github.com/rust-lang/crates.io-index)" = "b539898d22d4273ded07f64a05737649dc69095d92cb87c7097ec68e3f150b93"
@@ -859,7 +859,7 @@ dependencies = [
 "checksum proc-macro2 0.3.8 (registry+https://github.com/rust-lang/crates.io-index)" = "1b06e2f335f48d24442b35a19df506a835fb3547bc3c06ef27340da9acf5cae7"
 "checksum proc-macro2 0.4.19 (registry+https://github.com/rust-lang/crates.io-index)" = "ffe022fb8c8bd254524b0b3305906c1921fa37a84a644e29079a9e62200c3901"
 "checksum quick-error 1.2.2 (registry+https://github.com/rust-lang/crates.io-index)" = "9274b940887ce9addde99c4eee6b5c44cc494b182b97e73dc8ffdcb3397fd3f0"
-"checksum quick-protobuf 0.6.3 (git+https://github.com/tafia/quick-protobuf.git?rev=a5397610b2d18203b7265f39dba9ec111f45bcf4)" = "<none>"
+"checksum quick-protobuf 0.6.3 (registry+https://github.com/rust-lang/crates.io-index)" = "7bcf296e11fd042e7ac8ab9123fd37a73ace3138616c9442cf7bdd87fc6036dc"
 "checksum quote 0.5.2 (registry+https://github.com/rust-lang/crates.io-index)" = "9949cfe66888ffe1d53e6ec9d9f3b70714083854be20fd5e271b232a017401e8"
 "checksum quote 0.6.8 (registry+https://github.com/rust-lang/crates.io-index)" = "dd636425967c33af890042c483632d33fa7a18f19ad1d7ea72e8998c6ef8dea5"
 "checksum rand 0.5.5 (registry+https://github.com/rust-lang/crates.io-index)" = "e464cd887e869cddcae8792a4ee31d23c7edd516700695608f5b98c67ee0131c"
