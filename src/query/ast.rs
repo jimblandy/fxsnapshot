@@ -58,3 +58,16 @@ pub fn denoted_string(literal: &str) -> String {
     }
     result
 }
+
+pub fn denoted_regex(literal: &str) -> String {
+    let mut result = String::with_capacity(literal.len());
+    let mut iter = literal.chars();
+    while let Some(ch) = iter.next() {
+        match ch {
+            // Regex literals never end with a backslash.
+            '\\' => result.push(iter.next().unwrap()),
+            ch => result.push(ch)
+        }
+    }
+    result
+}

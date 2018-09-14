@@ -1,6 +1,7 @@
 // -*- mode: rust -*-
 
 use query::ast::{denoted_string,
+                 denoted_regex,
                  Expr,
                  NullaryOp,
                  Predicate,
@@ -70,7 +71,8 @@ PrimaryPredicate: Predicate = {
     },
     <id: r"[a-zA-Z_][a-zA-Z0-9_]+"> ":" <predicate: PrimaryPredicate> =>
         Predicate::Field(id.to_owned(), Box::new(predicate)),
-    <r: r"/[^/]*/"> => Predicate::Regex(regex::Regex::new(&r[1..r.len()-1]).unwrap()),
+    <r: r"/([^\\/]|\\.)*/"> => Predicate::Regex(regex::Regex::new(&denoted_regex(&r[1..r.len()-1])).unwrap()),
+    <r: r"#/([^/]|/[^#])*/#"> => Predicate::Regex(regex::Regex::new(&r[2..r.len()-2]).unwrap()),
     "ends" <p: PrimaryPredicate> => Predicate::Ends(Box::new(p)),
     "!" <p: PrimaryPredicate> => Predicate::Not(Box::new(p)),
     "(" <p: Predicate> ")" => p,
