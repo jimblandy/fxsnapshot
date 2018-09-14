@@ -68,8 +68,11 @@ Predicates:
     it behaves like the predicate `name: EXPRESSION`, accepting those nodes or
     edges whose name matches the string.
 
--   `FIELD: PREDICATE` - a predicate on edges or nodes, true when the value of the
+-   `FIELD: PREDICATE` - a predicate on edges or nodes, accepts values whose
     given `FIELD` matches `PREDICATE`.
+
+-   `ends PREDICATE` - a predicate on streams, accepts the stream if its last
+    element satisfies `PREDICATE`.
 
 -   `PREDICATE , PREDICATE` - the intersection of the two predicates
 
@@ -77,7 +80,7 @@ Predicates:
 
 -   `! PREDICATE` - logical 'not'
 
--   `/REGEXP/` - a predicate on strings, matching those that match `REGEXP`.
+-   `/REGEXP/` - a predicate on strings, accepting those that match `REGEXP`.
 
 Predicates on edges:
 

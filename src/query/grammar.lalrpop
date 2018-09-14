@@ -69,6 +69,7 @@ PrimaryPredicate: Predicate = {
     },
     <id: r"[a-zA-Z_][a-zA-Z0-9_]+"> ":" <predicate: PrimaryPredicate> =>
         Predicate::Field(id.to_owned(), Box::new(predicate)),
+    "ends" <p: PrimaryPredicate> => Predicate::Ends(Box::new(p)),
     "!" <p: PrimaryPredicate> => Predicate::Not(Box::new(p)),
     "(" <p: Predicate> ")" => p,
 };

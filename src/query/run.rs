@@ -181,6 +181,7 @@ fn plan_predicate(predicate: &Predicate) -> Box<PredicatePlan> {
                 field_name: field_name.clone(),
                 predicate: plan_predicate(predicate)
             }),
+        Predicate::Ends(predicate) => Box::new(Ends(plan_predicate(predicate))),
         Predicate::And(_) => unimplemented!("Predicate::And"),
         Predicate::Or(_) => unimplemented!("Predicate::Or"),
         Predicate::Not(_) => unimplemented!("Predicate::Not"),
@@ -362,4 +363,13 @@ fn get_edge_field<'v>(edge: &'v Edge, field: &str)
             field: field.into()
         }),
     })
+}
+
+struct Ends(Box<PredicatePlan>);
+impl PredicatePlan for Ends {
+    fn test<'a>(&'a self, dye: &'a DynEnv<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
+        let stream: &Stream<'a> = value.try_unwrap_ref()?;
+        let last = stream.clone().last()?.ok_or(value::Error::EmptyStream)?;
+        self.0.test(dye, &last)
+    }
 }

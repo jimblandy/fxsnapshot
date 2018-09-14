@@ -34,6 +34,7 @@ pub enum StreamBinaryOp {
 pub enum Predicate {
     Expr(Box<Expr>),
     Field(String, Box<Predicate>),
+    Ends(Box<Predicate>),
     And(Vec<Predicate>),
     Or(Vec<Predicate>),
     Not(Box<Predicate>),
