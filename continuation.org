@@ -1,7 +1,6 @@
 Git is the backtrace; this is the continuation.
 
 * small
-- [ ] decimal numbers
 - [ ] bug: `paths` assumes core dump edges and id's are all well-formed
   BreadthFirst should implement FallibleIterator
 - [ ] publish as crate

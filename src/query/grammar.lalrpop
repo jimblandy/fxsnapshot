@@ -23,6 +23,7 @@ pub Expr: Expr = {
 PrimaryExpr: Expr = {
     // Number literal.
     <n: r"0x[0-9a-fA-F]+"> => Expr::Number(u64::from_str_radix(&n[2..], 16).unwrap()),
+    <n: r"[0-9]+"> => Expr::Number(str::parse(&n).unwrap()),
 
     // String literal.
     <n: r#""([^\\"]|\\.)*""#> => Expr::String(denoted_string(&n[1..n.len() - 1])),
