@@ -51,7 +51,8 @@ pub fn denoted_string(literal: &str) -> String {
     let mut iter = literal.chars();
     while let Some(ch) = iter.next() {
         match ch {
-            '\\' => continue,
+            // String literals never end with a backslash.
+            '\\' => result.push(iter.next().unwrap()),
             ch => result.push(ch)
         }
     }
