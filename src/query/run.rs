@@ -9,7 +9,10 @@ use fallible_iterator::{self, FallibleIterator};
 
 use dump::{CoreDump, Edge, Node, NodeId};
 use super::ast::{Expr, NullaryOp, UnaryOp, StreamBinaryOp, Predicate};
+use super::breadth_first::{BreadthFirst, Step};
 use super::value::{self, EvalResult, Value, Stream, TryUnwrap};
+
+use std::iter::once;
 
 /// A plan of evaluation. We translate each query expression into a tree of
 /// `Plan` values, which serve as the code for a sort of indirect-threaded
@@ -58,7 +61,7 @@ fn plan_unary(op: &UnaryOp, expr: &Expr) -> Box<Plan> {
     match op {
         UnaryOp::First => Box::new(First(expr_plan)),
         UnaryOp::Edges => Box::new(Edges(expr_plan)),
-        UnaryOp::Paths => unimplemented!("UnaryOp::Paths"),
+        UnaryOp::Paths => Box::new(Paths(expr_plan)),
     }
 }
 
@@ -263,6 +266,41 @@ impl Plan for Filter {
         let stream: Stream = value.try_unwrap()?;
         let iter = stream.filter(move |item| self.predicate.test(&dye, item));
         Ok(Value::from(Stream::new(iter)))
+    }
+}
+
+struct Paths(Box<Plan>);
+impl Plan for Paths {
+    fn run<'a>(&'a self, dye: &'a DynEnv<'a>) -> EvalResult<'a> {
+        let value = self.0.run(dye)?;
+        let start: Node<'a> = value.try_unwrap()?;
+        let mut traversal = BreadthFirst::new(dye.dump);
+        traversal.set_start_node(start.id);
+
+        // The traversal produces a stream of paths, where each path is
+        // itself a stream of alternating nodes and edges.
+        let paths_iter = traversal
+            .map(move |path| {
+                if path.len() == 0 {
+                    Stream::new(fallible_iterator::convert(once(Ok(Value::from(start.clone())))))
+                } else {
+                    // "Don't be too proud of this technological terror you've constructed."
+                    let iter = once(Value::from(start.clone()))
+                        .chain(path.into_iter()
+                               .flat_map(move |Step { edge, .. }| {
+                                   // If this edge is participating in a path, it
+                                   // must have a referent...
+                                   let referent = dye.dump.get_node(edge.referent.unwrap()).unwrap();
+                                   once(Value::from(edge))
+                                       .chain(once(Value::from(referent)))
+                               }))
+                        .map(Ok);
+                    Stream::new(fallible_iterator::convert(iter))
+                }
+            })
+            .map(Value::from)
+            .map(Ok);
+        Ok(Value::from(Stream::new(fallible_iterator::convert(paths_iter))))
     }
 }
 

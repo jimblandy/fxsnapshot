@@ -46,6 +46,7 @@
 //! [plan](run/trait.Plan.html)
 //! [value](value/enum.Value.html)
 mod ast;
+mod breadth_first;
 mod run;
 mod value;
 

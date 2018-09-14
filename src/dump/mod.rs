@@ -172,6 +172,10 @@ impl<'buffer> CoreDump<'buffer> {
                 self.get_node_at_trusted_offset(offset)
             })
     }
+
+    pub fn has_node(&self, id: NodeId) -> bool {
+        self.node_offsets.contains_key(&id)
+    }
 }
 
 // Methods for scanning the protobuf stream.
@@ -210,16 +214,22 @@ impl<'buffer> CoreDump<'buffer> {
     }
 }
 
+impl<'a> fmt::Debug for CoreDump<'a> {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(fmt, "CoreDump {{ path: {:?} }}", self.path.display())
+    }
+}
+
 /// A type that can intern strings of type C. In practice, `Self` is always
 /// `CoreDump`, and `C` is `OneByteString` or `TwoByteString`.
 trait StringTable<'buffer, C: 'buffer + Copy + FromDumpBytes<'buffer>> {
     /// Record that `string` is `self`'s next string of type `C`.
     fn intern_string(&mut self, string: C);
 
-    /// Retrieve the string at index `i`.
+    /// Retrieve the `C` string at index `i`.
     fn lookup(&self, i: usize) -> C;
 
-    /// Intern `dedup`'s string, if present and given, in `table`.
+    /// Intern `dedup`'s string, if present and given, in `self`.
     fn intern<S>(&mut self, dedup: &S)
         where S: DeduplicatedString<'buffer, C>
     {
@@ -228,7 +238,7 @@ trait StringTable<'buffer, C: 'buffer + Copy + FromDumpBytes<'buffer>> {
         }
     }
 
-    /// Retrieve the string, if present. Consult `dump`'s back reference table
+    /// Retrieve the string, if present. Consult `self`'s back reference table
     /// if needed.
     fn get_string<D>(&self, dedup: &D) -> Option<C>
         where D: DeduplicatedString<'buffer, C>

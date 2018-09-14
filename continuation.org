@@ -1,7 +1,8 @@
 Git is the backtrace; this is the continuation.
 
 * small
-- [ ] implement `paths` operator
+- [ ] bug: `paths` assumes core dump edges and id's are all well-formed
+  BreadthFirst should implement FallibleIterator
 - [ ] publish as crate
   - [ ] publish new fallible-iterator
   - [ ] remove all git dependencies
