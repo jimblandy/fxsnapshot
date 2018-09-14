@@ -31,7 +31,10 @@ Git is the backtrace; this is the continuation.
 
 * medium
 
-A patch to make `fxsnapshot` operate directly on a compressed file would be
+- dominator trees?
+
+- A patch to make `fxsnapshot` operate directly on a compressed file would be
 welcome. However, decompressing a 13MiB snapshot takes about 0.3s, so it's
 probably nice to retain the ability to operate on uncompressed files by just
 mapping them into memory.
+
