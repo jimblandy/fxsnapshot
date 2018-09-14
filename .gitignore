@@ -2,3 +2,5 @@
 **/*.rs.bk
 *.fxsnapshot
 *.fxsnapshot.gz
+perf.data
+perf.data.old
