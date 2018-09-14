@@ -274,19 +274,31 @@ struct Paths(Box<Plan>);
 impl Plan for Paths {
     fn run<'a>(&'a self, dye: &'a DynEnv<'a>) -> EvalResult<'a> {
         let value = self.0.run(dye)?;
-        let start: Node<'a> = value.try_unwrap()?;
         let mut traversal = BreadthFirst::new(dye.dump);
-        traversal.set_start_node(start.id);
+        match value {
+            Value::Node(node) => traversal.add_start_node(node.id),
+            Value::Stream(mut stream) => {
+                while let Some(elt) = stream.next()? {
+                    let node: Node<'a> = elt.try_unwrap()?;
+                    traversal.add_start_node(node.id);
+                }
+            }
+            other => return Err(value::Error::Type {
+                expected: "node or stream of nodes",
+                actual: other.type_name(),
+            })
+        };
 
         // The traversal produces a stream of paths, where each path is
         // itself a stream of alternating nodes and edges.
         let paths_iter = traversal
-            .map(move |path| {
+            .filter_map(move |path| {
                 if path.len() == 0 {
-                    Stream::new(fallible_iterator::convert(once(Ok(Value::from(start.clone())))))
+                    None
                 } else {
                     // "Don't be too proud of this technological terror you've constructed."
-                    let iter = once(Value::from(start.clone()))
+                    let start = dye.dump.get_node(path[0].origin).unwrap();
+                    let iter = once(Value::from(start))
                         .chain(path.into_iter()
                                .flat_map(move |Step { edge, .. }| {
                                    // If this edge is participating in a path, it
@@ -296,7 +308,7 @@ impl Plan for Paths {
                                        .chain(once(Value::from(referent)))
                                }))
                         .map(Ok);
-                    Stream::new(fallible_iterator::convert(iter))
+                    Some(Stream::new(fallible_iterator::convert(iter)))
                 }
             })
             .map(Value::from)

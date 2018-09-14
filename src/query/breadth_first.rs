@@ -38,8 +38,8 @@ impl<'a> BreadthFirst<'a> {
         }
     }
 
-    /// Set the node from which traversal should begin.
-    pub fn set_start_node(&mut self, node: NodeId) {
+    /// Add `node` to the set of nodes from which traversal should begin.
+    pub fn add_start_node(&mut self, node: NodeId) {
         assert!(self.dump.has_node(node));
         self.visited.insert(node, None);
         self.front.push_back(node);
