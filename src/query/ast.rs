@@ -1,4 +1,7 @@
 //! A query expression, syntactically well-formed.
+
+use regex;
+
 #[derive(Clone, Debug)]
 pub enum Expr {
     Number(u64),
@@ -35,6 +38,7 @@ pub enum Predicate {
     Expr(Box<Expr>),
     Field(String, Box<Predicate>),
     Ends(Box<Predicate>),
+    Regex(regex::Regex),
     And(Vec<Predicate>),
     Or(Vec<Predicate>),
     Not(Box<Predicate>),

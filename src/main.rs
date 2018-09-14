@@ -5,6 +5,7 @@
              extern crate memmap;
              extern crate petgraph;
              extern crate quick_protobuf;
+             extern crate regex;
 
 // extern crate uses
 use failure::{Error, ResultExt};

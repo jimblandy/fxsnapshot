@@ -6,6 +6,7 @@
 //! [pe]: fn.plan_expr.html
 
 use fallible_iterator::{self, FallibleIterator};
+use regex;
 
 use dump::{CoreDump, Edge, Node, NodeId};
 use super::ast::{Expr, NullaryOp, UnaryOp, StreamBinaryOp, Predicate};
@@ -182,6 +183,7 @@ fn plan_predicate(predicate: &Predicate) -> Box<PredicatePlan> {
                 predicate: plan_predicate(predicate)
             }),
         Predicate::Ends(predicate) => Box::new(Ends(plan_predicate(predicate))),
+        Predicate::Regex(regex) => Box::new(Regex(regex.clone())),
         Predicate::And(_) => unimplemented!("Predicate::And"),
         Predicate::Or(_) => unimplemented!("Predicate::Or"),
         Predicate::Not(_) => unimplemented!("Predicate::Not"),
@@ -383,5 +385,13 @@ impl PredicatePlan for Ends {
         let stream: &Stream<'a> = value.try_unwrap_ref()?;
         let last = stream.clone().last()?.ok_or(value::Error::EmptyStream)?;
         self.0.test(dye, &last)
+    }
+}
+
+struct Regex(regex::Regex);
+impl PredicatePlan for Regex {
+    fn test<'a>(&'a self, _dye: &'a DynEnv<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
+        let string: &String = value.try_unwrap_ref()?;
+        Ok(self.0.is_match(&string))
     }
 }
