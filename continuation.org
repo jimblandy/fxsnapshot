@@ -1,6 +1,8 @@
 Git is the backtrace; this is the continuation.
 
 * small
+- [ ] regexp predicate
+- [ ] decimal numbers
 - [ ] bug: `paths` assumes core dump edges and id's are all well-formed
   BreadthFirst should implement FallibleIterator
 - [ ] publish as crate
@@ -8,6 +10,9 @@ Git is the backtrace; this is the continuation.
   - [ ] remove all git dependencies
 - [ ] Change `Stream<'a>` to `Stream<T>`, make `Stream` independent?
 - [ ] Change `TryUnwrap` to `FromValue`? so you'd write `Stream<'a>::from_value`?
+- [ ] Box edges and nodes in Value, to reduce its size.
+- [ ] Could some Streams be double-ended? Iterating over nodes can't; edges are
+  meaningless; but literals and paths are.
 - [ ] can we specialize some plans to the value types they produce?
 - [ ] closures and variables
 - [ ] Can EqualPredicate cache its given value? (A 'once_cache' in the lexical environment?)
