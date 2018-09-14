@@ -56,6 +56,10 @@ pub trait TryUnwrap<T: Sized>: Sized {
     /// success value. Otherwise, report a type error, using the type of `T` and
     /// the actual content of `self`
     fn try_unwrap(self) -> Result<T, Error>;
+
+    /// Like try_unwrap, but for references to values. Returns a `Result` of a
+    /// reference.
+    fn try_unwrap_ref(&self) -> Result<&T, Error>;
 }
 
 /// How to lay out elements of a stream when printed: one per line, or
@@ -169,6 +173,17 @@ macro_rules! impl_value_variant {
 
         impl<'a> TryUnwrap<$type> for Value<'a> {
             fn try_unwrap(self) -> Result<$type, Error> {
+                if let Value::$variant(v) = self {
+                    Ok(v)
+                } else {
+                    Err(Error::Type {
+                        expected: <$type>::NAME,
+                        actual: self.type_name()
+                    })
+                }
+            }
+
+            fn try_unwrap_ref(&self) -> Result<&$type, Error> {
                 if let Value::$variant(v) = self {
                     Ok(v)
                 } else {
