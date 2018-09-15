@@ -20,29 +20,19 @@ pub struct CoreDump<'buffer> {
     /// The core dump's timestamp.
     pub timestamp: Option<u64>,
 
-    /// The core dump data, mapped into memory.
-    bytes: &'buffer [u8],
-
-    /// The offset of the root node.
-    root_offset: usize,
+    /// The id of the root node.
+    root_id: NodeId,
 
     /// A map from deduplicated string indices to one-byte strings borrowed out
-    /// of `bytes`.
+    /// of the buffer holding the core dump.
     one_byte_strings: Vec<OneByteString<'buffer>>,
 
     /// A map from deduplicated string indices to two-byte strings borrowed out
-    /// of `bytes`.
+    /// of the buffer holding the core dump.
     two_byte_strings: Vec<TwoByteString<'buffer>>,
 
-    /// A map from node id's to message offsets. To be precise, this is the
-    /// offset within `bytes` of the Varint length preceding the `Node` message
-    /// with the given id.
-    node_offsets: HashMap<NodeId, usize>,
-
-    /// A map from StackFrame.Data id's to message offsets. This holds the
-    /// offset within `bytes` of the Varint length preceding the `Node` message
-    /// with the given id.
-    frame_offsets: HashMap<FrameId, usize>
+    /// A map from node id's to parsed Nodes.
+    nodes: HashMap<NodeId, Node<'buffer>>,
 }
 
 /// A ubi::Node from a core dump.
@@ -112,68 +102,62 @@ impl<'buffer> CoreDump<'buffer> {
         // Create the CoreDump first, since we populate its tables in place.
         let mut dump = CoreDump {
             path: path.to_owned(),
-            bytes,
             timestamp: metadata.timeStamp,
-            root_offset: bytes.len() - reader.len(),
+            root_id: NodeId(0),
             one_byte_strings: Vec::new(),
             two_byte_strings: Vec::new(),
-            node_offsets: HashMap::new(),
-            frame_offsets: HashMap::new(),
+            nodes: HashMap::new(),
         };
 
-        // Scan all nodes and stack frames.
-        while !reader.is_eof() {
-            let offset = bytes.len() - reader.len(); // ugh
+        // Scan the root node.
+        let root_node: protobuf::Node = match reader.read_message(bytes) {
+            Ok(n) => n,
+            Err(e) => {
+                let msg = format!("{}: couldn't read root node:",
+                                  path.display());
+                return Err(e.context(msg).into());
+            }
+        };
+        dump.root_id = match root_node.id {
+            None => bail!(format_err!("{}: root node has no id", path.display())),
+            Some(id) => NodeId(id),
+        };
+        dump.scan_node(&root_node);
 
+        // Scan all remaining nodes and stack frames.
+        while !reader.is_eof() {
             // Don't format an error message unless an error actually occurs.
             let node: protobuf::Node = match reader.read_message(bytes) {
                 Ok(n) => n,
                 Err(e) => {
                     let msg = format!("Couldn't read node from {} at offset {:x}:",
                                       path.display(),
-                                      offset);
+                                      bytes.len() - reader.len());
                     return Err(e.context(msg).into());
                 }
             };
 
-            dump.scan_node(&node, offset);
+            dump.scan_node(&node);
         }
 
         Ok(dump)
     }
 
-    pub fn node_count(&self) -> usize {
-        self.node_offsets.len()
+    pub fn get_root(&self) -> &Node<'buffer> {
+        // root_id had better be present in the table.
+        self.nodes.get(&self.root_id).unwrap()
     }
 
-    fn get_node_at_trusted_offset(&self, offset: usize) -> Node<'buffer> {
-        let tail = &self.bytes[offset..];
-        let mut reader = BytesReader::from_bytes(tail);
-        let node: protobuf::Node = reader.read_message(tail)
-            .expect("failed to read node at trusted offset");
-        Node::from_protobuf(&node, self)
+    pub fn get_node(&self, id: NodeId) -> Option<&Node<'buffer>> {
+        self.nodes.get(&id)
     }
 
-    pub fn get_root(&self) -> Node<'buffer> {
-        self.get_node_at_trusted_offset(self.root_offset)
-    }
-
-    pub fn get_node(&self, id: NodeId) -> Option<Node<'buffer>> {
-        self.node_offsets.get(&id)
-            .map(|&offset| {
-                self.get_node_at_trusted_offset(offset)
-            })
-    }
-
-    pub fn nodes<'a>(&'a self) -> impl Iterator<Item=Node<'buffer>> + Clone + 'a {
-        self.node_offsets.iter()
-            .map(move |(_id, &offset)| {
-                self.get_node_at_trusted_offset(offset)
-            })
+    pub fn nodes<'a>(&'a self) -> impl Iterator<Item=&Node<'buffer>> + Clone + 'a {
+        self.nodes.values()
     }
 
     pub fn has_node(&self, id: NodeId) -> bool {
-        self.node_offsets.contains_key(&id)
+        self.nodes.contains_key(&id)
     }
 }
 
@@ -183,29 +167,25 @@ impl<'buffer> CoreDump<'buffer> {
 // deduplicated string tables. No owning representations of nodes, edges,
 // frames, strings, etc. are built; everything borrows out of the buffer.
 impl<'buffer> CoreDump<'buffer> {
-    fn scan_node(&mut self, node: &protobuf::Node<'buffer>, offset: usize) {
-        if let Some(id) = node.id {
-            self.node_offsets.insert(NodeId(id), offset);
-        }
-        self.intern(&node.TypeNameOrRef);
-        for edge in &node.edges {
+    fn scan_node(&mut self, proto: &protobuf::Node<'buffer>) {
+        self.intern(&proto.TypeNameOrRef);
+        for edge in &proto.edges {
             self.intern(&edge.EdgeNameOrRef);
         }
 
-        self.scan_frame(node.allocationStack.as_ref(), offset);
+        self.scan_frame(proto.allocationStack.as_ref());
 
-        self.intern(&node.JSObjectClassNameOrRef);
-        self.intern(&node.ScriptFilenameOrRef);
-        self.intern(&node.descriptiveTypeNameOrRef);
+        self.intern(&proto.JSObjectClassNameOrRef);
+        self.intern(&proto.ScriptFilenameOrRef);
+        self.intern(&proto.descriptiveTypeNameOrRef);
+
+        let node = Node::from_protobuf(proto, self);
+        self.nodes.insert(node.id, node);
     }
 
-    fn scan_frame(&mut self, mut frame: Option<&protobuf::StackFrame<'buffer>>, offset: usize) {
+    fn scan_frame(&mut self, mut frame: Option<&protobuf::StackFrame<'buffer>>) {
         use self::generated::mozilla::devtools::protobuf::mod_StackFrame::OneOfStackFrameType;
         while let Some(protobuf::StackFrame { StackFrameType: OneOfStackFrameType::data(data) }) = frame {
-            if let Some(id) = data.id {
-                self.frame_offsets.insert(FrameId(id), offset);
-            }
-
             self.intern(&data.SourceOrRef);
             self.intern(&data.FunctionDisplayNameOrRef);
             frame = data.parent.as_ref().map(|r| &**r);

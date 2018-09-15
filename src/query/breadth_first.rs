@@ -26,7 +26,7 @@ pub struct BreadthFirst<'a> {
 #[derive(Clone, Debug)]
 pub struct Step<'a> {
     pub origin: NodeId,
-    pub edge: Edge<'a>
+    pub edge: &'a Edge<'a>
 }
 
 impl<'a> BreadthFirst<'a> {
@@ -91,7 +91,7 @@ impl<'a> Iterator for BreadthFirst<'a> {
             // new nodes. If so, record how we reached them, and queue them to
             // be produced later.
             let node = self.dump.get_node(id).unwrap();
-            for edge in node.edges {
+            for edge in &node.edges {
                 if let Some(referent) = edge.referent {
                     // Have we reached this edge's referent before?
                     match self.visited.entry(referent) {

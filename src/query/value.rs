@@ -17,8 +17,8 @@ use std::io;
 pub enum Value<'a> {
     Number(u64),
     String(String),
-    Edge(Edge<'a>),
-    Node(Node<'a>),
+    Edge(&'a Edge<'a>),
+    Node(&'a Node<'a>),
     Stream(Stream<'a>)
 }
 
@@ -199,8 +199,8 @@ macro_rules! impl_value_variant {
 
 impl_value_variant!(u64, Number, "number");
 impl_value_variant!(String, String, "string");
-impl_value_variant!(Edge<'a>, Edge, "edge");
-impl_value_variant!(Node<'a>, Node, "node");
+impl_value_variant!(&'a Edge<'a>, Edge, "edge");
+impl_value_variant!(&'a Node<'a>, Node, "node");
 impl_value_variant!(Stream<'a>, Stream, "stream");
 
 impl<'a, I> CloneableStream<'a> for I

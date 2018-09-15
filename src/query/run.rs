@@ -252,8 +252,8 @@ struct Edges(Box<Plan>);
 impl Plan for Edges {
     fn run<'a>(&'a self, dye: &'a DynEnv<'a>) -> EvalResult<'a> {
         let value = self.0.run(dye)?;
-        let node: Node = value.try_unwrap()?;
-        let iter = node.edges.clone().into_iter().map(|e| Ok(e.into()));
+        let node: &Node = value.try_unwrap()?;
+        let iter = node.edges.iter().map(|e| Ok(Value::from(e)));
         let iter = fallible_iterator::convert(iter);
         Ok(Stream::new(iter).into())
     }
@@ -281,7 +281,7 @@ impl Plan for Paths {
             Value::Node(node) => traversal.add_start_node(node.id),
             Value::Stream(mut stream) => {
                 while let Some(elt) = stream.next()? {
-                    let node: Node<'a> = elt.try_unwrap()?;
+                    let node: &Node<'a> = elt.try_unwrap()?;
                     traversal.add_start_node(node.id);
                 }
             }
