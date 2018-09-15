@@ -5,6 +5,9 @@
 This program can query Firefox devtools heap snapshots, search for nodes, find
 paths between nodes, and so on.
 
+This requires Rust 1.30.0 (nightly as of 2018-9-14), for stable
+Iterator::find_map.
+
 ## Queries
 
 The program is invoked like this:
@@ -21,6 +24,20 @@ example:
     $ fxsnapshot today.fxsnapshot.pb 'nodes { coarseType: "Script" }'
     $ fxsnapshot today.fxsnapshot.pb 'nodes { coarseType: "Script" } first edges'
 
+You can find all the devtools scripts:
+
+    $ fxsnapshot chrome.fxsnapshot 'nodes { scriptFilename: /devtools/ }'
+
+You can use the `paths` operator to find paths with interesting characteristics,
+like ending at a particular node:
+
+    $ fxsnapshot chrome.fxsnapshot 'root paths ends id: 0x7f412ebb2040'
+
+Or to find all the closures using a given script:
+
+    $ fxsnapshot chrome.fxsnapshot \
+    > 'nodes { JSObjectClassName: "Function" } paths ends id: 0x7f412ebb2040 first'
+
 Most of the below is still unimplemented, and may not be coherent, but here's
 the general plan:
 
@@ -36,7 +53,7 @@ Single values:
   is empty.
 
 - `STREAM find PREDICATE` - the first item from `STREAM` that matches
-  `PREDICATE`. Equivalent to `first STREAM { PREDICATE }`
+  `PREDICATE`. Equivalent to `STREAM { PREDICATE } first`
 
 Streams:
 
@@ -50,15 +67,15 @@ Streams:
   evaluator optimizes the evaluation of `STREAM` to produce only values matching
   `PREDICATE`.
 
+- `STREAM paths` - given `STREAM`, a finite stream of ids, generate a stream of
+  all paths that begin with any id from `STREAM`. Here, a 'path' is a non-empty
+  stream of edges. Shortest paths are generated first. The paths contain no loops.
+
 - `STREAM \ VAR . EXPR` - maps the function `lambda VAR . EXPR` over the values
   of `STREAM`.
 
 - `STREAM until PREDICATE` - the prefix of `STREAM` until the first value
   satisfying `PREDICATE`.
-
-- `STREAM paths` - given `STREAM`, a finite stream of ids, generate a stream of
-  all paths that begin with any id from `STREAM`. Here, a 'path' is a non-empty
-  stream of edges. Shortest paths are generated first. The paths contain no loops.
 
 Predicates:
 
@@ -74,13 +91,13 @@ Predicates:
 -   `ends PREDICATE` - a predicate on streams, accepts the stream if its last
     element satisfies `PREDICATE`.
 
+-   `/REGEXP/` - a predicate on strings, accepting those that match `REGEXP`.
+
 -   `PREDICATE , PREDICATE` - the intersection of the two predicates
 
 -   `PREDICATE || PREDICATE` - the union of the two predicates
 
 -   `! PREDICATE` - logical 'not'
-
--   `/REGEXP/` - a predicate on strings, accepting those that match `REGEXP`.
 
 Predicates on edges:
 
