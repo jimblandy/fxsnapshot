@@ -8,6 +8,7 @@ Git is the backtrace; this is the continuation.
 - [ ] publish as crate
   - [ ] publish new fallible-iterator
   - [ ] remove all git dependencies
+- [ ] How to turn a list of edges into a list of the nodes referred to?
 - [ ] Could some Streams be double-ended? HashMap::Iter isn't double-ended, so
   iterating over nodes couldn't be. Order of 'edges' is meaningless. bfs can't.
   But literals and paths are ordered. Should compare execution time of 'root
