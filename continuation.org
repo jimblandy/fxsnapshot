@@ -1,21 +1,23 @@
 Git is the backtrace; this is the continuation.
 
 * small
-- [ ] bug: `paths` assumes core dump edges and id's are all well-formed
+- [ ] bug: `paths` assumes core dump edges and id's are all well-formed;
   BreadthFirst should implement FallibleIterator
+- [ ] Change `Stream<'a>` to `Stream<T>`, make `Stream` independent?
+- [ ] Change `TryUnwrap` to `FromValue`? so you'd write `Stream<'a>::from_value`?
 - [ ] publish as crate
   - [ ] publish new fallible-iterator
   - [ ] remove all git dependencies
-- [ ] Change `Stream<'a>` to `Stream<T>`, make `Stream` independent?
-- [ ] Change `TryUnwrap` to `FromValue`? so you'd write `Stream<'a>::from_value`?
-- [ ] Box edges and nodes in Value, to reduce its size.
-- [ ] Could some Streams be double-ended? Iterating over nodes can't; edges are
-  meaningless; but literals and paths are.
+- [ ] Could some Streams be double-ended? HashMap::Iter isn't double-ended, so
+  iterating over nodes couldn't be. Order of 'edges' is meaningless. bfs can't.
+  But literals and paths are ordered. Should compare execution time of 'root
+  paths ends id: 0x7f412ebb2040' with and without, since that ends up actually
+  drawing all elements from each path, without double-endedness.
 - [ ] can we specialize some plans to the value types they produce?
 - [ ] closures and variables
 - [ ] Can EqualPredicate cache its given value? (A 'once_cache' in the lexical environment?)
 - [ ] definitions
-- [ ] file input
+- [ ] read queries from files
 - [ ] static type checking
   - [ ] explicit types on closure arguments
   - [ ] homogeneous streams
