@@ -3,7 +3,6 @@
 #[macro_use] extern crate failure_derive;
              extern crate fallible_iterator;
              extern crate memmap;
-             extern crate petgraph;
              extern crate quick_protobuf;
              extern crate regex;
 
