@@ -1,6 +1,7 @@
 Git is the backtrace; this is the continuation.
 
 * small
+- [ ] cache parsed Nodes
 - [ ] bug: `paths` assumes core dump edges and id's are all well-formed
   BreadthFirst should implement FallibleIterator
 - [ ] publish as crate
