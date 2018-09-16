@@ -8,6 +8,34 @@ paths between nodes, and so on.
 This requires Rust 1.30.0 (nightly as of 2018-9-14), for stable
 Iterator::find_map.
 
+## Taking heap snapshots
+
+You can make Firefox write a snapshot of its JavaScript heap to disk by
+evaluating the following expression in the browser toolbox console:
+
+    ChromeUtils.saveHeapSnapshot({ runtime: true })
+
+The return value will be a filename ending in `.fxsnapshot` in a temporary
+directory. This is a gzipped protobuf stream, of the format defined in
+[CoreDump.proto][coredump] in the Firefox sources.
+
+[coredump]: https://searchfox.org/mozilla-central/source/devtools/shared/heapsnapshot/CoreDump.proto
+
+This program operates only on decompressed snapshots, so you'll need to
+decompress it first:
+
+    $ mv /tmp/131196117.fxsnapshot ~/today.fxsnapshot.gz
+    $ gunzip today.fxsnapshot.gz
+
+### Parent and content processes
+
+In Firefox, all web content is held in content processes, children of the main
+Firefox process. The browser console runs in the parent process, so calling
+`saveHeapSnapshot` there won't get you any information about web content. If you
+want a heap snapshot that contains a particular tab's memory, select that tab
+and open the 'browser content toolbox' ('content' being the key word in that
+noun pile), select the console tab, and call `saveHeapSnapshot` there.
+
 ## Queries
 
 The program is invoked like this:
@@ -31,29 +59,40 @@ You can find all the devtools scripts:
 You can use the `paths` operator to find paths with interesting characteristics,
 like ending at a particular node:
 
-    $ fxsnapshot chrome.fxsnapshot 'root paths ends id: 0x7f412ebb2040'
+    $ fxsnapshot chrome.fxsnapshot 'root paths { ends id: 0x7f412ebb2040 }'
 
 Or to find all the closures using a given script:
 
     $ fxsnapshot chrome.fxsnapshot \
-    > 'nodes { JSObjectClassName: "Function" } paths ends id: 0x7f412ebb2040 first'
+    > 'nodes { JSObjectClassName: "Function" } paths { ends id: 0x7f412ebb2040 } first '
 
-Most of the below is still unimplemented, and may not be coherent, but here's
-the general plan:
+### Query syntax
+
+Things marked 'NYI' are not yet implemented.
 
 Single values:
 
 - number and string literals - as usual
 
-- variable names - variables are introduced by map expressions.
+- variable names - variables are introduced by map expressions. NYI
 
 - `root` - the snapshot's root node
+
+- `EXPR node` - the node whose id is `EXPR`. NYI
+
+- `EXPR . FIELD` - the value of `FIELD` in `EXPR`, which must be a node or edge. NYI
+
+- `EXPR referent` - the node that is the referent of the edge given by `EXPR`. NYI
+  Equivalent to `EXPR .referent node`.
+
+- `EXPR referents` - a stream of the nodes referred to by the node `EXPR`. NYI
+  Equivalent to `EXPR edges map referent;`
 
 - `STREAM first` - the first value produced by `STREAM`, or an error if `STREAM`
   is empty.
 
 - `STREAM find PREDICATE` - the first item from `STREAM` that matches
-  `PREDICATE`. Equivalent to `STREAM { PREDICATE } first`
+  `PREDICATE`. Equivalent to `STREAM { PREDICATE } first`. NYI
 
 Streams:
 
@@ -71,11 +110,12 @@ Streams:
   all paths that begin with any id from `STREAM`. Here, a 'path' is a non-empty
   stream of edges. Shortest paths are generated first. The paths contain no loops.
 
-- `STREAM \ VAR . EXPR` - maps the function `lambda VAR . EXPR` over the values
-  of `STREAM`.
+- `STREAM map EXPR-TAIL ;` - Produce a new stream producing a value `V
+  EXPR-TAIL` for each value `V` produced by `STREAM`. For example, `root edges
+  map referent ;` is a stream of the nodes referred to by `root`'s edges. NYI
 
 - `STREAM until PREDICATE` - the prefix of `STREAM` until the first value
-  satisfying `PREDICATE`.
+  satisfying `PREDICATE`. NYI
 
 Predicates:
 
@@ -88,47 +128,75 @@ Predicates:
 -   `FIELD: PREDICATE` - a predicate on edges or nodes, accepts values whose
     given `FIELD` matches `PREDICATE`.
 
--   `ends PREDICATE` - a predicate on streams, accepts the stream if its last
-    element satisfies `PREDICATE`.
-
 -   `/REGEXP/` - a predicate on strings, accepting those that match `REGEXP`.
 
--   `PREDICATE , PREDICATE` - the intersection of the two predicates
+-   `PREDICATE , PREDICATE` - the intersection of the two predicates NYI
 
--   `PREDICATE || PREDICATE` - the union of the two predicates
+-   `PREDICATE || PREDICATE` - the union of the two predicates NYI
 
--   `! PREDICATE` - logical 'not'
+-   `! PREDICATE` - logical 'not' NYI
 
-Predicates on edges:
+Predicates on paths (streams of alternating nodes and edges):
 
-- string in double quotes - an edge with the given name
+- `ends PREDICATE` - accepts the stream if its last element satisfies `PREDICATE`.
 
-Predicates on paths:
+- `[ node, node, ... ]` - path whose nodes match the given predicates. NYI
 
-- `[ node, node, ... ]` - path whose nodes match the given predicates.
+- `[ node, edge:node, ... ]` - path whose nodes and edges match the given predicates. NYI
 
-- `[ node, edge:node, ... ]` - path whose nodes and edges match the given predicates.
+- `[ node1, ... node2, ... node3 ]` - (literal `...`) in the syntax: a path
+  starting with a node that matches `node1`, passing through a node that matches
+  `node2`, and ending with a node that matches `node3`. NYI
 
-- `[ node, ... node, ... node ]` - (literal `...`) in the syntax: a path starting 
+## New syntax draft
 
-- `format template`
+There's no reason to be too inventive.
 
-## Taking heap snapshots
+### Haskell / SML
 
-You can make Firefox write a snapshot of its JavaScript heap to disk by
-evaluating the following expression in the browser toolbox console:
+I'd like to try with using postfix application instead of prefix, because I'd
+like to try supporting as-you-type query exploration, and typing new operators
+at the end of something is easier than going to the front and inserting new
+operators. `x y f` isn't that different from `f x y`, is it?
 
-    ChromeUtils.saveHeapSnapshot({ runtime: true })
+- Simple literals: numbers (`0x` hex and decimal), strings.
 
-The return value will be a filename ending in `.fxsnapshot` in a temporary
-directory. This is a gzipped protobuf stream, of the format defined in
-[CoreDump.proto][coredump] in the Firefox sources.
+- identifiers: built-in functions or local variables.
 
-[coredump]: https://searchfox.org/mozilla-central/source/devtools/shared/heapsnapshot/CoreDump.proto
+- `ARG FN`: Function application. `0x10 node` applies `node` to `0x10`. This is
+  right-associative, so it curries to the left: A B C D is (A (B (C D))).
 
-This program operates only on decompressed snapshots, so you'll need to
-decompress it first:
+- `(EXPR)`: grouping
 
-    $ mv /tmp/131196117.fxsnapshot ~/today.fxsnapshot.gz
-    $ gunzip today.fxsnapshot.gz
+- `.FIELD`: a function from a node or an edge to the value of the field named. Hence,
+  `root.id` is an application of the function `.id` to `root`.
 
+- `\ID. EXPR`: lambda
+
+- `EXPR OP EXPR`: infix operator.
+
+- `(OP EXPR)`, `(EXPR OP)`: left and right infix operator slices
+
+and that's it. Built-in functions and constants:
+
+- `root`: the root node.
+
+- `nodes`: a stream of all nodes.
+
+- `STREAM first`: the first value in `STREAM`.
+
+- `NODE edges`: a stream of the outgoing edges of `NODE`.
+
+- `STREAM paths` or `NODE paths`: a stream of all paths proceeding from `NODE`
+  or the set of nodes given by `STREAM`.
+
+Infix operators:
+
+- `A = B`: equality
+
+- `A . B`: composition
+
+Examples:
+
+- `nodes (\n.n.id = 0x7fc384307f80) filter`, or
+- `nodes (.id . (= 0x7fc384307f80)) filter`

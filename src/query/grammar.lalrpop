@@ -16,8 +16,14 @@ pub Expr: Expr = {
     <e: Expr> <op: UnaryOp> => Expr::Unary(op, Box::new(e)),
     <stream: Expr> <op: StreamBinaryOp> <predicate: Predicate> =>
         Expr::Stream(op, Box::new(stream), predicate),
-    <stream: Expr> <predicate: PrimaryPredicate> =>
-        Expr::Stream(StreamBinaryOp::Filter, Box::new(stream), predicate),
+    <stream: Expr> "{" <predicates: Comma<Predicate>> "}" => {
+        Expr::Stream(StreamBinaryOp::Filter, Box::new(stream),
+                     if predicates.len() == 1 {
+                         { predicates }.pop().unwrap()
+                     } else {
+                         Predicate::And(predicates)
+                     })
+    }
 };
 
 PrimaryExpr: Expr = {
@@ -63,13 +69,6 @@ Predicate: Predicate = {
 
 PrimaryPredicate: Predicate = {
     <PrimaryExpr> => Predicate::Expr(Box::new(<>)),
-    "{" <predicates: Comma<Predicate>> "}" => {
-        if predicates.len() == 1 {
-            { predicates }.pop().unwrap()
-        } else {
-            Predicate::And(predicates)
-        }
-    },
     <id: r"[a-zA-Z_][a-zA-Z0-9_]+"> ":" <predicate: PrimaryPredicate> =>
         Predicate::Field(id.to_owned(), Box::new(predicate)),
     <r: r"/([^\\/]|\\.)*/"> => Predicate::Regex(regex::Regex::new(&denoted_regex(&r[1..r.len()-1])).unwrap()),
