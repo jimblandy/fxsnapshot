@@ -18,11 +18,7 @@ pub Expr: Expr = {
         Expr::Stream(op, Box::new(stream), predicate),
     <stream: Expr> "{" <predicates: Comma<Predicate>> "}" => {
         Expr::Stream(StreamBinaryOp::Filter, Box::new(stream),
-                     if predicates.len() == 1 {
-                         { predicates }.pop().unwrap()
-                     } else {
-                         Predicate::And(predicates)
-                     })
+                     Predicate::And(predicates))
     }
 };
 

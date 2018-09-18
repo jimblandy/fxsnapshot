@@ -1,8 +1,6 @@
 Git is the backtrace; this is the continuation.
 
 * small
-- [ ] no need to optimize out 'and' nodes in parser, let planner do that
-- [ ] implement !, &&, ||
 - [ ] pathsfrom
 - [ ] bug: `paths` assumes core dump edges and id's are all well-formed;
   BreadthFirst should implement FallibleIterator

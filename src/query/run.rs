@@ -77,58 +77,104 @@ fn plan_stream(op: &StreamBinaryOp, stream: &Expr, predicate: &Predicate) -> Box
 }
 
 fn plan_filter(stream: &Expr, predicate: &Predicate) -> Box<Plan> {
-    // Implement `nodes { id: ... }` using `NodesById`, rather than a linear
-    // search over all nodes.
+    let stream_plan: Box<Plan>;
+    let predicate_plan;
+
+    // Can we implement `nodes { id: ... }` using `NodesById`, rather than a
+    // linear search over all nodes?
     if let Expr::Nullary(NullaryOp::Nodes) = stream {
-        // Does the predicate include a required match for a specific node
-        // identifier?
         if let Some((id, remainder)) = find_predicate_required_id(predicate) {
-            // Efficiently produce a (zero- or one-element) stream of nodes with
-            // the given id.
-            let nodes = Box::new(NodesById(plan_expr(id)));
-            if let Some(remainder) = remainder {
-                // Apply whatever parts of the predicate remain.
-                return Box::new(Filter {
-                    stream: nodes,
-                    predicate: plan_predicate(&remainder)
-                });
-            } else {
-                // The predicate contains only an id filter, so `NodesById` is
-                // all we need for the entire filter expression.
-                return nodes;
-            };
+            stream_plan = Box::new(NodesById(plan_expr(id)));
+            predicate_plan = plan_junction::<And>(&remainder);
+        } else {
+            stream_plan = Box::new(Nodes);
+            predicate_plan = plan_predicate(predicate);
         }
+    } else {
+        stream_plan = plan_expr(stream);
+        predicate_plan = plan_predicate(predicate);
     }
 
-    // We can't use NodesById, so just generate a normal filter expression.
-    return Box::new(Filter {
-        stream: plan_expr(stream),
-        predicate: plan_predicate(predicate)
-    });
+    match predicate_plan {
+        // If the predicate is always true, then the stream is unfiltered.
+        PlanOrTrivial::Trivial(true) => stream_plan,
+
+        // If the predicate will never match, then the result is always an empty
+        // stream.
+        PlanOrTrivial::Trivial(false) => Box::new(StreamLiteral(vec![])),
+
+        // If the predicate is interesting, then filter the result from the
+        // stream.
+        PlanOrTrivial::Plan(plan) => Box::new(Filter { stream: stream_plan, filter: plan }),
+    }
+}
+
+/// When we plan a predicate, sometimes we discover that the predicate is always
+/// true or always false, and we shouldn't produce an execution plan for it at
+/// all. Values of this type are the results of such an effort: either a plan
+/// for executing a predicate, or the answer we know it will always return.
+enum PlanOrTrivial {
+    Plan(Box<PredicatePlan>),
+    Trivial(bool)
+}
+
+impl PlanOrTrivial {
+    fn map_plan<F>(self, f: F) -> PlanOrTrivial
+        where F: FnOnce(Box<PredicatePlan>) -> Box<PredicatePlan>
+    {
+        match self {
+            PlanOrTrivial::Plan(plan) => PlanOrTrivial::Plan(f(plan)),
+            trivial @ PlanOrTrivial::Trivial(_) => trivial,
+        }
+    }
+}
+
+fn plan_predicate(predicate: &Predicate) -> PlanOrTrivial {
+    use self::PlanOrTrivial::*;
+    match predicate {
+        Predicate::Expr(expr) => Plan(Box::new(EqualPredicate(plan_expr(expr)))),
+        Predicate::Field(field_name, sub) => {
+            plan_predicate(sub)
+                .map_plan(|predicate| Box::new(FieldPredicate {
+                    field_name: field_name.clone(),
+                    predicate
+                }))
+        }
+        Predicate::Ends(sub) => {
+            plan_predicate(sub)
+                .map_plan(|subplan| Box::new(Ends(subplan)))
+        }
+        Predicate::Regex(regex) => Plan(Box::new(Regex(regex.clone()))),
+        Predicate::And(predicates) => plan_junction::<And>(predicates),
+        Predicate::Or(predicates) => plan_junction::<Or>(predicates),
+        Predicate::Not(predicate) => match plan_predicate(predicate) {
+            Trivial(k) => Trivial(!k),
+            Plan(p) => Plan(Box::new(Not(p))),
+        }
+    }
 }
 
 /// If `predicate` only admits `Node`s whose id is equal to a specific
-/// expression, then return that expression, together with a new `Predicate`
-/// representing the parts of `predicate` other than the `id`.
+/// expression, then return that expression, together with a vector of
+/// `Predicates` that must also match, representing the parts of `predicate`
+/// other than the `id`. These are the subterms of an implicit conjunction. The
+/// vector may be empty.
 ///
 /// Note that if we do have to construct a remainder predicate, it must be
 /// constructed afresh, since we can't modify the predicate we were handed.
 /// Since we use `Box` and not `Rc` in our parse tree, this could end up copying
 /// a lot if the remainder predicate is large.
 fn find_predicate_required_id(predicate: &Predicate)
-                              -> Option<(&Expr, Option<Predicate>)>
+                              -> Option<(&Expr, Vec<Predicate>)>
 {
     match predicate {
         Predicate::Field(name, id_predicate) if name == "id" => {
             if let Predicate::Expr(id_expr) = &**id_predicate {
-                return Some((id_expr, None));
+                return Some((id_expr, vec![]));
             }
         }
 
         Predicate::And(predicates) => {
-            // Conjunctions should always have at least two elements.
-            assert!(predicates.len() >= 2);
-
             // Search the sub-predicates of this conjunction for one that
             // requires a specific id.
             if let Some((i, id, child_remainder)) = predicates.iter()
@@ -138,30 +184,9 @@ fn find_predicate_required_id(predicate: &Predicate)
                         .map(|(id, child_remainder)| (i, id, child_remainder))
                 })
             {
-                if let Some(child_remainder) = child_remainder {
-                    // predicates[i] requires a specific id. We've hoisted
-                    // out the id expression, so replace predicates[i] with
-                    // the remainder.
-                    //
-                    // If this clone gets expensive, we should probably
-                    // start using `Rc` instead of `Box` in the AST.
-                    let mut remainder = predicates.clone();
-                    remainder[i] = child_remainder;
-                    return Some((id, Some(Predicate::And(remainder))));
-                } else {
-                    // predicates[i] requires a specific id, with no remainder
-                    // predicate. Just drop predicates[i] from the conjunction
-                    // altogether.
-
-                    // Avoid creating a single-element conjunction.
-                    if predicates.len() == 2 {
-                        return Some((id, Some(predicates[1-i].clone())));
-                    }
-
-                    let mut remainder = predicates.clone();
-                    remainder.remove(i);
-                    return Some((id, Some(Predicate::And(remainder))));
-                }
+                // predicates[i] requires a specific id. We've hoisted out the
+                // id expression, so replace predicates[i] with child_remainder.
+                return Some((id, splice(predicates, i, child_remainder)));
             }
         }
 
@@ -174,19 +199,18 @@ fn find_predicate_required_id(predicate: &Predicate)
     None
 }
 
-fn plan_predicate(predicate: &Predicate) -> Box<PredicatePlan> {
-    match predicate {
-        Predicate::Expr(expr) => Box::new(EqualPredicate(plan_expr(expr))),
-        Predicate::Field(field_name, predicate) =>
-            Box::new(FieldPredicate {
-                field_name: field_name.clone(),
-                predicate: plan_predicate(predicate)
-            }),
-        Predicate::Ends(predicate) => Box::new(Ends(plan_predicate(predicate))),
-        Predicate::Regex(regex) => Box::new(Regex(regex.clone())),
-        Predicate::And(_) => unimplemented!("Predicate::And"),
-        Predicate::Or(_) => unimplemented!("Predicate::Or"),
-        Predicate::Not(_) => unimplemented!("Predicate::Not"),
+/// Return a vector equal to `slice`, but with `slice[i]` replaced with the
+/// elements of `v`.
+///
+/// This is like `Vec::splice`, except that it clones---but only when necessary.
+fn splice<T: Clone>(slice: &[T], i: usize, v: Vec<T>) -> Vec<T> {
+    assert!(i < slice.len());
+    if slice.len() == 1 {
+        v
+    } else {
+        let mut vec = slice.to_owned();
+        vec.splice(i..=i, v.into_iter());
+        vec
     }
 }
 
@@ -261,13 +285,13 @@ impl Plan for Edges {
 
 struct Filter {
     stream: Box<Plan>,
-    predicate: Box<PredicatePlan>,
+    filter: Box<PredicatePlan>,
 }
 impl Plan for Filter {
     fn run<'a>(&'a self, dye: &'a DynEnv<'a>) -> EvalResult<'a> {
         let value = self.stream.run(dye)?;
         let stream: Stream = value.try_unwrap()?;
-        let iter = stream.filter(move |item| self.predicate.test(&dye, item));
+        let iter = stream.filter(move |item| self.filter.test(&dye, item));
         Ok(Value::from(Stream::new(iter)))
     }
 }
@@ -395,3 +419,80 @@ impl PredicatePlan for Regex {
         Ok(self.0.is_match(&string))
     }
 }
+
+struct And(Vec<Box<PredicatePlan>>);
+impl PredicatePlan for And {
+    fn test<'a>(&'a self, dye: &'a DynEnv<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
+        fallible_iterator::convert(self.0.iter().map(Ok))
+            .all(|plan| plan.test(dye, value))
+    }
+}
+
+struct Or(Vec<Box<PredicatePlan>>);
+impl PredicatePlan for Or {
+    fn test<'a>(&'a self, dye: &'a DynEnv<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
+        fallible_iterator::convert(self.0.iter().map(Ok))
+            .any(|plan| plan.test(dye, value))
+    }
+}
+
+struct Not(Box<PredicatePlan>);
+impl PredicatePlan for Not {
+    fn test<'a>(&'a self, dye: &'a DynEnv<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
+        Ok(!self.0.test(dye, value)?)
+    }
+}
+
+/// A predicate plan representing conjunction or disjunction.
+trait BlahJunction {
+    /// The consonant for `And` is `true`; for `Or`, it is false. The dissonant
+    /// is the opposite.
+    ///
+    /// When a subterm is trivial: If its answer is the consonant, drop that
+    /// subterm from the overall expression; if all subterms are dropped this
+    /// way, the entire predicate is trivially consonant. If its answer is the
+    /// dissonant, the entire predicate is trivially the dissonant.
+    const CONSONANT: bool;
+
+    /// Construct an instance from a vector of subterm plans, guaranteed to be
+    /// non-empty.
+    fn construct(subplans: Vec<Box<PredicatePlan>>) -> Box<PredicatePlan>;
+}
+
+impl BlahJunction for And {
+    const CONSONANT: bool = true;
+    fn construct(subplans: Vec<Box<PredicatePlan>>) -> Box<PredicatePlan> {
+        Box::new(And(subplans))
+    }
+}
+
+impl BlahJunction for Or {
+    const CONSONANT: bool = false;
+    fn construct(subplans: Vec<Box<PredicatePlan>>) -> Box<PredicatePlan> {
+        Box::new(Or(subplans))
+    }
+}
+
+/// Plan a `BlahJunction` predicate with the given `subterms`.
+fn plan_junction<J: BlahJunction>(subterms: &[Predicate]) -> PlanOrTrivial {
+    let mut plans = Vec::new();
+    for pot in subterms.iter().map(plan_predicate) {
+        match pot {
+            PlanOrTrivial::Plan(plan) => {
+                plans.push(plan);
+            }
+            PlanOrTrivial::Trivial(k) => {
+                if k == !J::CONSONANT {
+                    return PlanOrTrivial::Trivial(!J::CONSONANT);
+                }
+            }
+        }
+    }
+
+    if plans.is_empty() {
+        PlanOrTrivial::Trivial(J::CONSONANT)
+    } else {
+        PlanOrTrivial::Plan(J::construct(plans))
+    }
+}
+
