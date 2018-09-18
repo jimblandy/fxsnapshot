@@ -38,6 +38,8 @@ pub enum Predicate {
     Expr(Box<Expr>),
     Field(String, Box<Predicate>),
     Ends(Box<Predicate>),
+    Any(Box<Predicate>),
+    All(Box<Predicate>),
     Regex(regex::Regex),
     And(Vec<Predicate>),
     Or(Vec<Predicate>),

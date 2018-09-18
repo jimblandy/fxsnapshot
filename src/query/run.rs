@@ -144,6 +144,16 @@ fn plan_predicate(predicate: &Predicate) -> PlanOrTrivial {
             plan_predicate(sub)
                 .map_plan(|subplan| Box::new(Ends(subplan)))
         }
+        Predicate::Any(sub) => match plan_predicate(sub) {
+            PlanOrTrivial::Plan(p) => Plan(Box::new(Any(p))),
+            PlanOrTrivial::Trivial(false) => Trivial(false),
+            PlanOrTrivial::Trivial(true) => Plan(Box::new(NonEmpty)),
+        }
+        Predicate::All(sub) => match plan_predicate(sub) {
+            PlanOrTrivial::Plan(p) => Plan(Box::new(All(p))),
+            PlanOrTrivial::Trivial(true) => Trivial(true),
+            PlanOrTrivial::Trivial(false) => Plan(Box::new(Empty)),
+        }
         Predicate::Regex(regex) => Plan(Box::new(Regex(regex.clone()))),
         Predicate::And(predicates) => plan_junction::<And>(predicates),
         Predicate::Or(predicates) => plan_junction::<Or>(predicates),
@@ -496,3 +506,34 @@ fn plan_junction<J: BlahJunction>(subterms: &[Predicate]) -> PlanOrTrivial {
     }
 }
 
+struct Any(Box<PredicatePlan>);
+impl PredicatePlan for Any {
+    fn test<'a>(&'a self, dye: &'a DynEnv<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
+        let stream: &Stream = value.try_unwrap_ref()?;
+        Ok(stream.clone().any(|element| self.0.test(dye, &element))?)
+    }
+}
+
+struct All(Box<PredicatePlan>);
+impl PredicatePlan for All {
+    fn test<'a>(&'a self, dye: &'a DynEnv<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
+        let stream: &Stream = value.try_unwrap_ref()?;
+        Ok(stream.clone().all(|element| self.0.test(dye, &element))?)
+    }
+}
+
+struct Empty;
+impl PredicatePlan for Empty {
+    fn test<'a>(&'a self, _dye: &'a DynEnv<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
+        let stream: &Stream = value.try_unwrap_ref()?;
+        Ok(if let None = stream.clone().next()? { false } else { true })
+    }
+}
+
+struct NonEmpty;
+impl PredicatePlan for NonEmpty {
+    fn test<'a>(&'a self, _dye: &'a DynEnv<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
+        let stream: &Stream = value.try_unwrap_ref()?;
+        Ok(if let None = stream.clone().next()? { true } else { false })
+    }
+}

@@ -60,6 +60,15 @@ Predicate: Predicate = {
             }
             _ => Predicate::Or(vec![left, right])
         }
+    },
+    <left: Predicate> "&&" <right: PrimaryPredicate> => {
+        match left {
+            Predicate::And(mut predicates) => {
+                predicates.push(right);
+                Predicate::And(predicates)
+            }
+            _ => Predicate::And(vec![left, right])
+        }
     }
 };
 
@@ -70,6 +79,8 @@ PrimaryPredicate: Predicate = {
     <r: r"/([^\\/]|\\.)*/"> => Predicate::Regex(regex::Regex::new(&denoted_regex(&r[1..r.len()-1])).unwrap()),
     <r: r"#/([^/]|/[^#])*/#"> => Predicate::Regex(regex::Regex::new(&r[2..r.len()-2]).unwrap()),
     "ends" <p: PrimaryPredicate> => Predicate::Ends(Box::new(p)),
+    "any" <p: PrimaryPredicate> => Predicate::Any(Box::new(p)),
+    "all" <p: PrimaryPredicate> => Predicate::All(Box::new(p)),
     "!" <p: PrimaryPredicate> => Predicate::Not(Box::new(p)),
     "(" <p: Predicate> ")" => p,
 };

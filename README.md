@@ -130,11 +130,15 @@ Predicates:
 
 -   `/REGEXP/` - a predicate on strings, accepting those that match `REGEXP`.
 
--   `PREDICATE , PREDICATE` - the intersection of the two predicates NYI
+-   `PREDICATE && PREDICATE` - the intersection of the two predicates NYI
 
--   `PREDICATE || PREDICATE` - the union of the two predicates NYI
+-   `PREDICATE || PREDICATE` - the union of the two predicates
 
--   `! PREDICATE` - logical 'not' NYI
+-   `! PREDICATE` - logical 'not'
+
+-   `any PREDICATE`, `all PREDICATE` - predicates on streams. These accept if
+    the stream has any elements matching `PREDICATE`, and if all the stream's
+    elements match `PREDICATE`.
 
 Predicates on paths (streams of alternating nodes and edges):
 
