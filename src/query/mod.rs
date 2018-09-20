@@ -55,6 +55,6 @@ mod grammar {
 }
 
 pub use self::ast::Expr;
-pub use self::grammar::ExprParser;
+pub use self::grammar::QueryParser;
 pub use self::run::{plan_expr, Plan, DynEnv};
 pub use self::value::Value;

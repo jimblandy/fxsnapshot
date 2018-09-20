@@ -11,18 +11,29 @@ use regex;
 
 grammar;
 
-pub Expr: Expr = {
-    <PrimaryExpr>,
-    <e: Expr> <op: UnaryOp> => Expr::Unary(op, Box::new(e)),
-    <stream: Expr> <op: StreamBinaryOp> <predicate: Predicate> =>
+pub Query: Expr = {
+    <Expr<"">>,
+}
+
+// There are two flavors of expressions: Expr<""> is the full expression
+// grammar, while Expr<"No Parens"> excludes parenthesized expressions. The
+// latter is used for implicit equality predicates, like the "5" in "id: 5".
+// Because predicates can be parenthesized too, there is no actual change to the
+// set of strings accepted; the conditional simply tells LALRPOP that it can
+// parse "(5)" in "id: (5)" as a predicate, not an expression, while still
+// parsing it as an expression in "id: ((5))".
+Expr<P>: Expr = {
+    <PrimaryExpr<P>>,
+    <e: Expr<P>> <op: UnaryOp> => Expr::Unary(op, Box::new(e)),
+    <stream: Expr<P>> <op: StreamBinaryOp> <predicate: Predicate> =>
         Expr::Stream(op, Box::new(stream), predicate),
-    <stream: Expr> "{" <predicates: Comma<Predicate>> "}" => {
+    <stream: Expr<P>> "{" <predicates: Comma<Predicate>> "}" => {
         Expr::Stream(StreamBinaryOp::Filter, Box::new(stream),
                      Predicate::And(predicates))
     }
 };
 
-PrimaryExpr: Expr = {
+PrimaryExpr<P>: Expr = {
     // Number literal.
     <n: r"0x[0-9a-fA-F]+"> => Expr::Number(u64::from_str_radix(&n[2..], 16).unwrap()),
     <n: r"[0-9]+"> => Expr::Number(str::parse(&n).unwrap()),
@@ -30,8 +41,11 @@ PrimaryExpr: Expr = {
     // String literal.
     <n: r#""([^\\"]|\\.)*""#> => Expr::String(denoted_string(&n[1..n.len() - 1])),
 
-    "[" <elts: Comma<Expr>> "]" => Expr::StreamLiteral(elts),
+    "[" <elts: Comma<Expr<P>>> "]" => Expr::StreamLiteral(elts),
     <Nullary> => Expr::Nullary(<>),
+
+    // Grouping. Conditional to avoid ambiguity with predicates.
+    "(" <e: Expr<"">> ")" if P != "No Parens" => e,
 };
 
 Nullary: NullaryOp = {
@@ -73,7 +87,7 @@ Predicate: Predicate = {
 };
 
 PrimaryPredicate: Predicate = {
-    <PrimaryExpr> => Predicate::Expr(Box::new(<>)),
+    <PrimaryExpr<"No Parens">> => Predicate::Expr(Box::new(<>)),
     <id: r"[a-zA-Z_][a-zA-Z0-9_]+"> ":" <predicate: PrimaryPredicate> =>
         Predicate::Field(id.to_owned(), Box::new(predicate)),
     <r: r"/([^\\/]|\\.)*/"> => Predicate::Regex(regex::Regex::new(&denoted_regex(&r[1..r.len()-1])).unwrap()),

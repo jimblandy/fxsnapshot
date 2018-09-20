@@ -37,7 +37,7 @@ fn run() -> Result<(), Error> {
     }
 
     let query_text = args[1].to_string_lossy().into_owned();
-    let query = query::ExprParser::new().parse(&query_text)
+    let query = query::QueryParser::new().parse(&query_text)
         .map_err(|e| format_err!("{}", e))?;
     let plan = query::plan_expr(&query);
 
