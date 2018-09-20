@@ -8,6 +8,7 @@ Git is the backtrace; this is the continuation.
 - [ ] pathsfrom
 - [ ] bug: `paths` assumes core dump edges and id's are all well-formed;
   BreadthFirst should implement FallibleIterator
+- [ ] 
 - [ ] Change `Stream<'a>` to `Stream<T>`, make `Stream` independent?
 - [ ] Change `TryUnwrap` to `FromValue`? so you'd write `Stream<'a>::from_value`?
 - [ ] publish as crate
@@ -43,4 +44,12 @@ Git is the backtrace; this is the continuation.
 welcome. However, decompressing a 13MiB snapshot takes about 0.3s, so it's
 probably nice to retain the ability to operate on uncompressed files by just
 mapping them into memory.
+
+- set operations: union, intersection, subtract
+
+- grouping, sorting
+
+- This query language resembles [LINQ][linq].
+
+[linq]: https://docs.microsoft.com/en-us/dotnet/csharp/programming-guide/concepts/linq/basic-linq-query-operations
 
