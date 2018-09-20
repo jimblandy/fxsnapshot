@@ -41,7 +41,7 @@ PrimaryExpr<P>: Expr = {
     // String literal.
     <n: r#""([^\\"]|\\.)*""#> => Expr::String(denoted_string(&n[1..n.len() - 1])),
 
-    "[" <elts: Comma<Expr<P>>> "]" => Expr::StreamLiteral(elts),
+    "[" <elts: Comma<Expr<"">>> "]" => Expr::StreamLiteral(elts),
     <Nullary> => Expr::Nullary(<>),
 
     // Grouping. Conditional to avoid ambiguity with predicates.
