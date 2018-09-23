@@ -9,7 +9,7 @@ use fallible_iterator::{self, FallibleIterator};
 use regex;
 
 use dump::{CoreDump, Edge, Node, NodeId};
-use super::ast::{Expr, NullaryOp, UnaryOp, StreamBinaryOp, Predicate};
+use super::ast::{Expr, NullaryOp, UnaryOp, PredicateOp, Predicate};
 use super::breadth_first::{BreadthFirst, Step};
 use super::value::{self, EvalResult, Value, Stream, TryUnwrap};
 
@@ -46,7 +46,7 @@ pub fn plan_expr(expr: &Expr) -> Box<Plan> {
         }
         Expr::Nullary(op) => plan_nullary(op),
         Expr::Unary(op, expr) => plan_unary(op, expr),
-        Expr::Stream(op, stream, predicate) => plan_stream(op, stream, predicate),
+        Expr::Predicate(op, stream, predicate) => plan_stream(op, stream, predicate),
     }
 }
 
@@ -66,13 +66,13 @@ fn plan_unary(op: &UnaryOp, expr: &Expr) -> Box<Plan> {
     }
 }
 
-fn plan_stream(op: &StreamBinaryOp, stream: &Expr, predicate: &Predicate) -> Box<Plan> {
+fn plan_stream(op: &PredicateOp, stream: &Expr, predicate: &Predicate) -> Box<Plan> {
     //let stream_plan = plan_expr(stream);
     //let predicate_plan = plan_predicate(predicate);
     match op {
-        StreamBinaryOp::Find => unimplemented!("StreamBinaryOp::Find"),
-        StreamBinaryOp::Filter => plan_filter(stream, predicate),
-        StreamBinaryOp::Until => unimplemented!("StreamBinaryOp::Until"),
+        PredicateOp::Find => unimplemented!("PredicateOp::Find"),
+        PredicateOp::Filter => plan_filter(stream, predicate),
+        PredicateOp::Until => unimplemented!("PredicateOp::Until"),
     }
 }
 

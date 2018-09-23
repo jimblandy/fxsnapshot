@@ -10,7 +10,7 @@ pub enum Expr {
 
     Nullary(NullaryOp),
     Unary(UnaryOp, Box<Expr>),
-    Stream(StreamBinaryOp, Box<Expr>, Predicate),
+    Predicate(PredicateOp, Box<Expr>, Predicate),
 }
 
 #[derive(Clone, Debug)]
@@ -27,7 +27,7 @@ pub enum UnaryOp {
 }
 
 #[derive(Clone, Debug)]
-pub enum StreamBinaryOp {
+pub enum PredicateOp {
     Find,
     Filter,
     Until,
