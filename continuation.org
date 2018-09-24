@@ -1,6 +1,7 @@
 Git is the backtrace; this is the continuation.
 
 * small
+- [ ] "grammar.lalrpop" is a redundant name
 - [ ] improved output formats for values, more recognizable for general users
 - [ ] better layout / pretty-printing
 - [ ] lambda
