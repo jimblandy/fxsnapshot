@@ -26,10 +26,15 @@ pub Query: Box<Expr> = {
 
 Expr<P> = {
     <Application<P>>,
+    <Lambda>
 }
 
 Application<P>: Box<Expr> = {
     <head: PrimaryExpr<P>> <suffixes: Suffix*> => suffixes.into_iter().fold(head, |e, s| s(e)),
+    <head: PrimaryExpr<P>> <suffixes: Suffix*> <fun: Lambda> => {
+        let arg = suffixes.into_iter().fold(head, |e, s| s(e));
+        Box::new(Expr::App { fun, arg })
+    }
 };
 
 // A Suffix parses to a closure that will build an expr, given the left-hand
@@ -61,6 +66,9 @@ PrimaryExpr<P>: Box<Expr> = {
 
     // Nullary operator.
     <Nullary> => Box::new(Expr::Nullary(<>)),
+
+    // Variable references.
+    <Id> => Box::new(Expr::Var(<>)),
 };
 
 Nullary: NullaryOp = {
@@ -73,6 +81,8 @@ UnaryOp: UnaryOp = {
     "edges" => UnaryOp::Edges,
     "paths" => UnaryOp::Paths,
 };
+
+Lambda: Box<Expr> = "|" <Id> "|" <Expr<"">> => Box::new(Expr::Lambda(<>));
 
 PredicateOp: PredicateOp = {
     "find" => PredicateOp::Find,
@@ -103,8 +113,7 @@ Predicate: Predicate = {
 
 PrimaryPredicate: Predicate = {
     <PrimaryExpr<"No Parens">> => Predicate::Expr(<>),
-    <id: r"[a-zA-Z_][a-zA-Z0-9_]+"> ":" <p: PrimaryPredicate> =>
-        Predicate::Field(id.to_owned(), Box::new(p)),
+    <id: Id> ":" <p: PrimaryPredicate> => Predicate::Field(id, Box::new(p)),
     <r: r"/([^\\/]|\\.)*/"> => Predicate::Regex(regex::Regex::new(&denoted_regex(&r[1..r.len()-1])).unwrap()),
     <r: r"#/([^/]|/[^#])*/#"> => Predicate::Regex(regex::Regex::new(&r[2..r.len()-2]).unwrap()),
     "ends" <p: PrimaryPredicate> => Predicate::Ends(Box::new(p)),
@@ -113,6 +122,8 @@ PrimaryPredicate: Predicate = {
     "!" <p: PrimaryPredicate> => Predicate::Not(Box::new(p)),
     "(" <p: Predicate> ")" => p,
 };
+
+Id: String = <r"[a-zA-Z_][a-zA-Z0-9_]*"> => <>.to_owned();
 
 Comma<T>: Vec<T> = {
     <v:(<T> ",")*> <e:T?> => match e {

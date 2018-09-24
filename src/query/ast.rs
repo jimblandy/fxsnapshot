@@ -12,6 +12,10 @@ pub enum Expr {
     Nullary(NullaryOp),
     Unary(Box<Expr>, UnaryOp),
     Predicate(Box<Expr>, PredicateOp, Predicate),
+
+    Var(String),
+    Lambda(String, Box<Expr>),
+    App { arg: Box<Expr>, fun: Box<Expr> },
 }
 
 #[derive(Clone, Debug)]

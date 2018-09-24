@@ -47,6 +47,10 @@ pub fn plan_expr(expr: &Expr) -> Box<Plan> {
         Expr::Nullary(op) => plan_nullary(op),
         Expr::Unary(expr, op) => plan_unary(op, expr),
         Expr::Predicate(stream, op, predicate) => plan_stream(op, stream, predicate),
+
+        Expr::Var(_) => unimplemented!("Expr::Var"),
+        Expr::Lambda(_, _) => unimplemented!("Expr::Lambda"),
+        Expr::App { .. } => unimplemented!("Expr::App"),
     }
 }
 
