@@ -25,11 +25,11 @@ pub Query: Expr = {
 
 Expr<P>: Expr = {
     <PrimaryExpr<P>>,
-    <e: Expr<P>> <op: UnaryOp> => Expr::Unary(op, Box::new(e)),
+    <e: Expr<P>> <op: UnaryOp> => Expr::Unary(Box::new(e), op),
     <stream: Expr<P>> <op: PredicateOp> <predicate: Predicate> =>
-        Expr::Predicate(op, Box::new(stream), predicate),
+        Expr::Predicate(Box::new(stream), op, predicate),
     <stream: Expr<P>> "{" <predicates: Comma<Predicate>> "}" => {
-        Expr::Predicate(PredicateOp::Filter, Box::new(stream),
+        Expr::Predicate(Box::new(stream), PredicateOp::Filter,
                      Predicate::And(predicates))
     }
 };

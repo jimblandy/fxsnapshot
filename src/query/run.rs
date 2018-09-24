@@ -45,8 +45,8 @@ pub fn plan_expr(expr: &Expr) -> Box<Plan> {
             Box::new(StreamLiteral(elts.iter().map(plan_expr).collect()))
         }
         Expr::Nullary(op) => plan_nullary(op),
-        Expr::Unary(op, expr) => plan_unary(op, expr),
-        Expr::Predicate(op, stream, predicate) => plan_stream(op, stream, predicate),
+        Expr::Unary(expr, op) => plan_unary(op, expr),
+        Expr::Predicate(stream, op, predicate) => plan_stream(op, stream, predicate),
     }
 }
 

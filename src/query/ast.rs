@@ -9,8 +9,8 @@ pub enum Expr {
     StreamLiteral(Vec<Expr>),
 
     Nullary(NullaryOp),
-    Unary(UnaryOp, Box<Expr>),
-    Predicate(PredicateOp, Box<Expr>, Predicate),
+    Unary(Box<Expr>, UnaryOp),
+    Predicate(Box<Expr>, PredicateOp, Predicate),
 }
 
 #[derive(Clone, Debug)]
