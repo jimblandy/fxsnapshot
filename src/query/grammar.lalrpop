@@ -2,6 +2,7 @@
 
 use query::ast::{denoted_string,
                  denoted_regex,
+                 Builder,
                  Expr,
                  NullaryOp,
                  Predicate,
@@ -11,7 +12,7 @@ use regex;
 
 grammar;
 
-pub Query: Expr = {
+pub Query: Box<Expr> = {
     <Expr<"">>,
 }
 
@@ -23,30 +24,43 @@ pub Query: Expr = {
 // parse "(5)" in "id: (5)" as a predicate, not an expression, while still
 // parsing it as an expression in "id: ((5))".
 
-Expr<P>: Expr = {
-    <PrimaryExpr<P>>,
-    <e: Expr<P>> <op: UnaryOp> => Expr::Unary(Box::new(e), op),
-    <stream: Expr<P>> <op: PredicateOp> <predicate: Predicate> =>
-        Expr::Predicate(Box::new(stream), op, predicate),
-    <stream: Expr<P>> "{" <predicates: Comma<Predicate>> "}" => {
-        Expr::Predicate(Box::new(stream), PredicateOp::Filter,
-                     Predicate::And(predicates))
-    }
+Expr<P> = {
+    <Application<P>>,
+}
+
+Application<P>: Box<Expr> = {
+    <head: PrimaryExpr<P>> <suffixes: Suffix*> => suffixes.into_iter().fold(head, |e, s| s(e)),
 };
 
-PrimaryExpr<P>: Expr = {
-    // Number literal.
-    <n: r"0x[0-9a-fA-F]+"> => Expr::Number(u64::from_str_radix(&n[2..], 16).unwrap()),
-    <n: r"[0-9]+"> => Expr::Number(str::parse(&n).unwrap()),
+// A Suffix parses to a closure that will build an expr, given the left-hand
+// operand. This is a bit baroque, but having the grammar this way seemed nicer
+// than the alternatives.
+Suffix: Builder = {
+    <op: UnaryOp> =>
+        Box::new(move |lhs| Box::new(Expr::Unary(lhs, op))),
+    <op: PredicateOp> <predicate: Predicate> =>
+        Box::new(move |lhs| Box::new(Expr::Predicate(lhs, op, predicate))),
+    "{" <predicates: Comma<Predicate>> "}" =>
+        Box::new(move |lhs| Box::new(Expr::Predicate(lhs, PredicateOp::Filter,
+                                                     Predicate::And(predicates)))),
+}
+
+PrimaryExpr<P>: Box<Expr> = {
+    // Numeric literal.
+    <n: r"0x[0-9a-fA-F]+"> => Box::new(Expr::Number(u64::from_str_radix(&n[2..], 16).unwrap())),
+    <n: r"[0-9]+"> => Box::new(Expr::Number(str::parse(&n).unwrap())),
 
     // String literal.
-    <n: r#""([^\\"]|\\.)*""#> => Expr::String(denoted_string(&n[1..n.len() - 1])),
+    <n: r#""([^\\"]|\\.)*""#> => Box::new(Expr::String(denoted_string(&n[1..n.len() - 1]))),
 
-    "[" <elts: Comma<Expr<"">>> "]" => Expr::StreamLiteral(elts),
-    <Nullary> => Expr::Nullary(<>),
+    // Stream literal.
+    "[" <elts: Comma<Expr<"">>> "]" => Box::new(Expr::StreamLiteral(elts)),
 
     // Grouping. Conditional to avoid ambiguity with predicates.
     "(" <e: Expr<"">> ")" if P != "No Parens" => e,
+
+    // Nullary operator.
+    <Nullary> => Box::new(Expr::Nullary(<>)),
 };
 
 Nullary: NullaryOp = {
@@ -88,9 +102,9 @@ Predicate: Predicate = {
 };
 
 PrimaryPredicate: Predicate = {
-    <PrimaryExpr<"No Parens">> => Predicate::Expr(Box::new(<>)),
-    <id: r"[a-zA-Z_][a-zA-Z0-9_]+"> ":" <predicate: PrimaryPredicate> =>
-        Predicate::Field(id.to_owned(), Box::new(predicate)),
+    <PrimaryExpr<"No Parens">> => Predicate::Expr(<>),
+    <id: r"[a-zA-Z_][a-zA-Z0-9_]+"> ":" <p: PrimaryPredicate> =>
+        Predicate::Field(id.to_owned(), Box::new(p)),
     <r: r"/([^\\/]|\\.)*/"> => Predicate::Regex(regex::Regex::new(&denoted_regex(&r[1..r.len()-1])).unwrap()),
     <r: r"#/([^/]|/[^#])*/#"> => Predicate::Regex(regex::Regex::new(&r[2..r.len()-2]).unwrap()),
     "ends" <p: PrimaryPredicate> => Predicate::Ends(Box::new(p)),

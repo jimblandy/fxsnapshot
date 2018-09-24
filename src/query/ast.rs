@@ -1,12 +1,13 @@
 //! A query expression, syntactically well-formed.
 
 use regex;
+use std::boxed::FnBox;
 
 #[derive(Clone, Debug)]
 pub enum Expr {
     Number(u64),
     String(String),
-    StreamLiteral(Vec<Expr>),
+    StreamLiteral(Vec<Box<Expr>>),
 
     Nullary(NullaryOp),
     Unary(Box<Expr>, UnaryOp),
@@ -45,6 +46,8 @@ pub enum Predicate {
     Or(Vec<Predicate>),
     Not(Box<Predicate>),
 }
+
+pub type Builder = Box<FnBox(Box<Expr>) -> Box<Expr>>;
 
 // Given the text of a string literal, `literal`, return the `String` it
 // denotes.

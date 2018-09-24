@@ -42,7 +42,7 @@ pub fn plan_expr(expr: &Expr) -> Box<Plan> {
         Expr::Number(n) => Box::new(Const(*n)),
         Expr::String(s) => Box::new(Const(s.clone())),
         Expr::StreamLiteral(elts) => {
-            Box::new(StreamLiteral(elts.iter().map(plan_expr).collect()))
+            Box::new(StreamLiteral(elts.iter().map(|b| plan_expr(b)).collect()))
         }
         Expr::Nullary(op) => plan_nullary(op),
         Expr::Unary(expr, op) => plan_unary(op, expr),
