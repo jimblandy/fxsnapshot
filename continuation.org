@@ -9,7 +9,7 @@ Git is the backtrace; this is the continuation.
 - [ ] pathsfrom
 - [ ] bug: `paths` assumes core dump edges and id's are all well-formed;
   BreadthFirst should implement FallibleIterator
-- [ ] 
+- [ ] avoid exposing hash table nondeterminism
 - [ ] Change `Stream<'a>` to `Stream<T>`, make `Stream` independent?
 - [ ] Change `TryUnwrap` to `FromValue`? so you'd write `Stream<'a>::from_value`?
 - [ ] publish as crate
