@@ -6,10 +6,13 @@ Git is the backtrace; this is the continuation.
 - [ ] better layout / pretty-printing
 - [ ] lambda
 - [ ] map
+- [ ] distinguish 'shortestPaths', 'allPaths'
 - [ ] pathsfrom
 - [ ] pre-box Predicates, simplify actions in Predicate
+- [ ] impl Debug for Plan
 - [ ] bug: `paths` assumes core dump edges and id's are all well-formed;
   BreadthFirst should implement FallibleIterator
+- [ ] use interned atoms for identifiers, instead of strings (crate string_cache?)
 - [ ] avoid exposing hash table nondeterminism
 - [ ] Change `Stream<'a>` to `Stream<T>`, make `Stream` independent?
 - [ ] Change `TryUnwrap` to `FromValue`? so you'd write `Stream<'a>::from_value`?
@@ -32,6 +35,7 @@ Git is the backtrace; this is the continuation.
   - [ ] explicit types on closure arguments
   - [ ] homogeneous streams
 - [ ] source positions
+- [ ] print closures helpfully
 - [ ] specialize to avoid dynamic dispatch for constants and variable references
       (once we can actually write code large enough to benchmark)
 - [ ] trait for structs from which we can fetch fields by name?
