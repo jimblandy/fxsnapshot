@@ -1,9 +1,12 @@
 Git is the backtrace; this is the continuation.
 
 * small
+- [ ] understand what that weak reference is doing
 - [ ] "grammar.lalrpop" is a redundant name
 - [ ] improved output formats for values, more recognizable for general users
 - [ ] better layout / pretty-printing
+- [ ] nicknames for nodes/edges
+- [ ] save previous results for use in future queries, `Out[1] = ...`
 - [ ] lambda
 - [ ] map
 - [ ] distinguish 'shortestPaths', 'allPaths'
