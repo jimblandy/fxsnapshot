@@ -13,8 +13,11 @@ pub enum Expr {
 
     Var(Var),
     App { arg: Box<Expr>, fun: Box<Expr> },
-    Lambda { var: String, body: Box<Expr> },
+    Lambda { var: String, body: Box<Expr>, id: ExprId },
 }
+
+#[derive(Clone, Debug)]
+pub struct ExprId(pub usize);
 
 #[derive(Clone, Debug)]
 pub enum Var {

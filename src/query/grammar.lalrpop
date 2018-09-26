@@ -4,6 +4,7 @@ use query::ast::{denoted_string,
                  denoted_regex,
                  Builder,
                  Expr,
+                 ExprId,
                  Var,
                  Predicate,
                  PredicateOp};
@@ -79,7 +80,7 @@ Var: Var = {
 };
 
 Lambda: Box<Expr> = "|" <var: Id> "|" <body: Expr<"">> =>
-    Box::new(Expr::Lambda { var, body });
+    Box::new(Expr::Lambda { var, body, id: ExprId(0) });
 
 PredicateOp: PredicateOp = {
     "find" => PredicateOp::Find,
