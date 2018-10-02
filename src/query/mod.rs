@@ -59,9 +59,13 @@ pub use self::grammar::{QueryParser, Token};
 pub use self::run::{plan_expr, Plan, DynEnv};
 pub use self::value::Value;
 
+use self::ast::label_exprs;
+
 pub type ParseError<'input> = lalrpop_util::ParseError<usize, Token<'input>, &'static str>;
 
 pub fn parse(query_text: &str) -> Result<Box<Expr>, ParseError> {
     let mut expr = QueryParser::new().parse(&query_text)?;
+    label_exprs(&mut expr);
+    eprintln!("labeled expr: {:?}", expr);
     Ok(expr)
 }
