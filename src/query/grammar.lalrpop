@@ -4,9 +4,8 @@ use query::ast::{denoted_string,
                  denoted_regex,
                  Builder,
                  Expr,
-                 NullaryOp,
+                 Var,
                  Predicate,
-                 UnaryOp,
                  PredicateOp};
 use regex;
 
@@ -41,8 +40,8 @@ Application<P>: Box<Expr> = {
 // operand. This is a bit baroque, but having the grammar this way seemed nicer
 // than the alternatives.
 Suffix: Builder = {
-    <op: UnaryOp> =>
-        Box::new(move |lhs| Box::new(Expr::Unary(lhs, op))),
+    <PrimaryExpr<"">> => Box::new(move |lhs| Box::new(Expr::App { arg: lhs, fun: <> })),
+
     <op: PredicateOp> <predicate: Predicate> =>
         Box::new(move |lhs| Box::new(Expr::Predicate(lhs, op, predicate))),
     "{" <predicates: Comma<Predicate>> "}" =>
@@ -64,25 +63,23 @@ PrimaryExpr<P>: Box<Expr> = {
     // Grouping. Conditional to avoid ambiguity with predicates.
     "(" <e: Expr<"">> ")" if P != "No Parens" => e,
 
-    // Nullary operator.
-    <Nullary> => Box::new(Expr::Nullary(<>)),
-
     // Variable references.
-    <Id> => Box::new(Expr::Var(<>)),
+    <Var> => Box::new(Expr::Var(<>)),
 };
 
-Nullary: NullaryOp = {
-    "root" => NullaryOp::Root,
-    "nodes" => NullaryOp::Nodes,
+Var: Var = {
+    "edges" => Var::Edges,
+    "first" => Var::First,
+    "nodes" => Var::Nodes,
+    "paths" => Var::Paths,
+    "root" => Var::Root,
+
+    // Reference to a global or local variable.
+    <Id> => Var::Id(<>),
 };
 
-UnaryOp: UnaryOp = {
-    "first" => UnaryOp::First,
-    "edges" => UnaryOp::Edges,
-    "paths" => UnaryOp::Paths,
-};
-
-Lambda: Box<Expr> = "|" <Id> "|" <Expr<"">> => Box::new(Expr::Lambda(<>));
+Lambda: Box<Expr> = "|" <var: Id> "|" <body: Expr<"">> =>
+    Box::new(Expr::Lambda { var, body });
 
 PredicateOp: PredicateOp = {
     "find" => PredicateOp::Find,

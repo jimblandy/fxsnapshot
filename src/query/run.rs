@@ -9,7 +9,7 @@ use fallible_iterator::{self, FallibleIterator};
 use regex;
 
 use dump::{CoreDump, Edge, Node, NodeId};
-use super::ast::{Expr, NullaryOp, UnaryOp, PredicateOp, Predicate};
+use super::ast::{Expr, Predicate, PredicateOp, Var};
 use super::breadth_first::{BreadthFirst, Step};
 use super::value::{self, EvalResult, Value, Stream, TryUnwrap};
 
@@ -44,29 +44,31 @@ pub fn plan_expr(expr: &Expr) -> Box<Plan> {
         Expr::StreamLiteral(elts) => {
             Box::new(StreamLiteral(elts.iter().map(|b| plan_expr(b)).collect()))
         }
-        Expr::Nullary(op) => plan_nullary(op),
-        Expr::Unary(expr, op) => plan_unary(op, expr),
         Expr::Predicate(stream, op, predicate) => plan_stream(op, stream, predicate),
 
-        Expr::Var(_) => unimplemented!("Expr::Var"),
-        Expr::Lambda(_, _) => unimplemented!("Expr::Lambda"),
-        Expr::App { .. } => unimplemented!("Expr::App"),
+        Expr::Var(var) => plan_var(var),
+        Expr::Lambda { .. } => unimplemented!("Expr::Lambda"),
+        Expr::App { arg, fun } => plan_app(arg, fun),
     }
 }
 
-fn plan_nullary(op: &NullaryOp) -> Box<Plan> {
-    match op {
-        NullaryOp::Root => Box::new(Root),
-        NullaryOp::Nodes => Box::new(Nodes),
+fn plan_var(var: &Var) -> Box<Plan> {
+    match var {
+        Var::Root => Box::new(Root),
+        Var::Nodes => Box::new(Nodes),
+        _ => unimplemented!("plan_var"),
     }
 }
 
-fn plan_unary(op: &UnaryOp, expr: &Expr) -> Box<Plan> {
-    let expr_plan = plan_expr(expr);
-    match op {
-        UnaryOp::First => Box::new(First(expr_plan)),
-        UnaryOp::Edges => Box::new(Edges(expr_plan)),
-        UnaryOp::Paths => Box::new(Paths(expr_plan)),
+fn plan_app(arg: &Expr, fun: &Expr) -> Box<Plan> {
+    let arg_plan = plan_expr(arg);
+
+    // Handle direct applications of certain built-in functions.
+    match fun {
+        Expr::Var(Var::Edges) => Box::new(Edges(arg_plan)),
+        Expr::Var(Var::First) => Box::new(First(arg_plan)),
+        Expr::Var(Var::Paths) => Box::new(Paths(arg_plan)),
+        _ => unimplemented!("plan_app"),
     }
 }
 
@@ -86,17 +88,20 @@ fn plan_filter(stream: &Expr, predicate: &Predicate) -> Box<Plan> {
 
     // Can we implement `nodes { id: ... }` using `NodesById`, rather than a
     // linear search over all nodes?
-    if let Expr::Nullary(NullaryOp::Nodes) = stream {
-        if let Some((id, remainder)) = find_predicate_required_id(predicate) {
-            stream_plan = Box::new(NodesById(plan_expr(id)));
-            predicate_plan = plan_junction::<And>(&remainder);
-        } else {
-            stream_plan = Box::new(Nodes);
+    match stream {
+        Expr::Var(Var::Nodes) => {
+            if let Some((id, remainder)) = find_predicate_required_id(predicate) {
+                stream_plan = Box::new(NodesById(plan_expr(id)));
+                predicate_plan = plan_junction::<And>(&remainder);
+            } else {
+                stream_plan = Box::new(Nodes);
+                predicate_plan = plan_predicate(predicate);
+            }
+        },
+        stream => {
+            stream_plan = plan_expr(stream);
             predicate_plan = plan_predicate(predicate);
         }
-    } else {
-        stream_plan = plan_expr(stream);
-        predicate_plan = plan_predicate(predicate);
     }
 
     match predicate_plan {

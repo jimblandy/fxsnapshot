@@ -9,26 +9,25 @@ pub enum Expr {
     String(String),
     StreamLiteral(Vec<Box<Expr>>),
 
-    Nullary(NullaryOp),
-    Unary(Box<Expr>, UnaryOp),
     Predicate(Box<Expr>, PredicateOp, Predicate),
 
-    Var(String),
-    Lambda(String, Box<Expr>),
+    Var(Var),
     App { arg: Box<Expr>, fun: Box<Expr> },
+    Lambda { var: String, body: Box<Expr> },
 }
 
 #[derive(Clone, Debug)]
-pub enum NullaryOp {
-    Root,
-    Nodes,
-}
-
-#[derive(Clone, Debug)]
-pub enum UnaryOp {
-    First,
+pub enum Var {
+    // Special names of built-in operators. For now, these are reserved words,
+    // not globals.
     Edges,
+    First,
+    Nodes,
     Paths,
+    Root,
+
+    // Reference to a global or local variable.
+    Id(String),
 }
 
 #[derive(Clone, Debug)]
