@@ -55,6 +55,13 @@ mod grammar {
 }
 
 pub use self::ast::Expr;
-pub use self::grammar::QueryParser;
+pub use self::grammar::{QueryParser, Token};
 pub use self::run::{plan_expr, Plan, DynEnv};
 pub use self::value::Value;
+
+pub type ParseError<'input> = lalrpop_util::ParseError<usize, Token<'input>, &'static str>;
+
+pub fn parse(query_text: &str) -> Result<Box<Expr>, ParseError> {
+    let mut expr = QueryParser::new().parse(&query_text)?;
+    Ok(expr)
+}

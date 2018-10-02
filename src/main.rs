@@ -4,6 +4,7 @@
 #[macro_use] extern crate failure;
 #[macro_use] extern crate failure_derive;
              extern crate fallible_iterator;
+             extern crate lalrpop_util;
              extern crate memmap;
              extern crate quick_protobuf;
              extern crate regex;
@@ -39,7 +40,7 @@ fn run() -> Result<(), Error> {
     }
 
     let query_text = args[1].to_string_lossy().into_owned();
-    let query = query::QueryParser::new().parse(&query_text)
+    let query = query::parse(&query_text)
         .map_err(|e| format_err!("{}", e))?;
     let plan = query::plan_expr(&query);
 
