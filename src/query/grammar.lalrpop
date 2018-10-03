@@ -76,7 +76,7 @@ Var: Var = {
     "root" => Var::Root,
 
     // Reference to a global or local variable.
-    <Id> => Var::Id(<>),
+    <Id> => Var::Id { name: <>, id: ExprId(0) },
 };
 
 Lambda: Box<Expr> = "|" <var: Id> "|" <body: Expr<"">> =>

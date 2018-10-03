@@ -13,7 +13,7 @@ pub enum Expr {
 
     Var(Var),
     App { arg: Box<Expr>, fun: Box<Expr> },
-    Lambda { var: String, body: Box<Expr>, id: ExprId },
+    Lambda { id: ExprId, var: String, body: Box<Expr> },
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -30,7 +30,7 @@ pub enum Var {
     Root,
 
     // Reference to a global or local variable.
-    Id(String),
+    Id { id: ExprId, name: String },
 }
 
 #[derive(Clone, Debug)]
@@ -135,9 +135,12 @@ impl ExprLabeler {
 impl ExprWalkerMut for ExprLabeler {
     type Error = ();
     fn visit_expr(&mut self, expr: &mut Expr) -> Result<(), Self::Error> {
-        if let Expr::Lambda { id, .. } = expr {
-            *id = self.next_id;
-            self.next_id = ExprId(self.next_id.0 + 1);
+        match expr {
+            Expr::Lambda { id, .. } | Expr::Var(Var::Id { id, .. }) => {
+                *id = self.next_id;
+                self.next_id = ExprId(self.next_id.0 + 1);
+            }
+            _ => ()
         }
         self.visit_expr_children(expr)
     }
