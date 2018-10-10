@@ -54,18 +54,20 @@ mod grammar {
     include!(concat!(env!("OUT_DIR"), "/query/grammar.rs"));
 }
 
-pub use self::ast::Expr;
-pub use self::grammar::{QueryParser, Token};
-pub use self::run::{plan_expr, Plan, DynEnv};
+pub use self::grammar::Token;
+pub use self::run::{Plan, DynEnv};
 pub use self::value::Value;
 
 use self::ast::label_exprs;
 
 pub type ParseError<'input> = lalrpop_util::ParseError<usize, Token<'input>, &'static str>;
 
-pub fn parse(query_text: &str) -> Result<Box<Expr>, ParseError> {
+use self::grammar::QueryParser;
+use self::run::plan_expr;
+
+pub fn parse(query_text: &str) -> Result<Box<Plan>, ParseError> {
     let mut expr = QueryParser::new().parse(&query_text)?;
     label_exprs(&mut expr);
     eprintln!("labeled expr: {:?}", expr);
-    Ok(expr)
+    Ok(plan_expr(&expr))
 }
