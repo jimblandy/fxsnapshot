@@ -44,7 +44,10 @@ Git is the backtrace; this is the continuation.
 - [ ] trait for structs from which we can fetch fields by name?
 - [ ] specify our own trait for formatting values?
 - [ ] Use From<&[u8]> instead of FromDumpBytes?
-
+- [ ] should paths be their own type? might be nice
+** closures
+- [ ] multi-argument closures
+- [ ] retain only those values actually captured
 * medium
 
 - dominator trees?
