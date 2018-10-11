@@ -19,6 +19,9 @@ pub enum Expr {
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub struct LambdaId(pub usize);
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+pub struct UseId(pub usize);
+
 #[derive(Clone, Debug)]
 pub enum Var {
     // Special names of built-in operators. For now, these are reserved words,
@@ -30,7 +33,7 @@ pub enum Var {
     Root,
 
     // Reference to a global or local variable.
-    Id { id: LambdaId, name: String },
+    Lexical { id: UseId, name: String },
 }
 
 #[derive(Clone, Debug)]
@@ -122,19 +125,27 @@ trait ExprWalkerMut {
     }
 }
 
+#[derive(Default)]
 struct ExprLabeler {
-    next_id: LambdaId,
+    next_lambda: usize,
+    next_var: usize,
 }
 
 impl ExprLabeler {
     fn new() -> ExprLabeler {
-        ExprLabeler { next_id: LambdaId(0) }
+        ExprLabeler::default()
     }
 
-    fn next(&mut self) -> LambdaId {
-        let result = self.next_id;
-        self.next_id = LambdaId(self.next_id.0 + 1);
-        result
+    fn next_lambda(&mut self) -> LambdaId {
+        let next = self.next_lambda;
+        self.next_lambda = next + 1;
+        LambdaId(next)
+    }
+
+    fn next_var(&mut self) -> UseId {
+        let next = self.next_var;
+        self.next_var = next + 1;
+        UseId(next)
     }
 }
 
@@ -142,8 +153,11 @@ impl ExprWalkerMut for ExprLabeler {
     type Error = ();
     fn visit_expr(&mut self, expr: &mut Expr) -> Result<(), Self::Error> {
         match expr {
-            Expr::Lambda { id, .. } | Expr::Var(Var::Id { id, .. }) => {
-                *id = self.next();
+            Expr::Lambda { id, .. } => {
+                *id = self.next_lambda();
+            }
+            Expr::Var(Var::Lexical { id, .. }) => {
+                *id = self.next_var();
             }
             _ => ()
         }

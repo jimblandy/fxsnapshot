@@ -6,6 +6,7 @@ use query::ast::{denoted_string,
                  Expr,
                  LambdaId,
                  Var,
+                 UseId,
                  Predicate,
                  PredicateOp};
 use regex;
@@ -76,7 +77,7 @@ Var: Var = {
     "root" => Var::Root,
 
     // Reference to a global or local variable.
-    <Id> => Var::Id { name: <>, id: LambdaId(0) },
+    <Id> => Var::Lexical { name: <>, id: UseId(0) },
 };
 
 Lambda: Box<Expr> = "|" <vars: Comma<Id>> "|" <body: Expr<"">> =>
