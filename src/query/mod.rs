@@ -65,7 +65,7 @@ pub type ParseError<'input> = lalrpop_util::ParseError<usize, Token<'input>, &'s
 use self::grammar::QueryParser;
 use self::run::plan_expr;
 
-pub fn parse(query_text: &str) -> Result<Box<Plan>, ParseError> {
+pub fn compile(query_text: &str) -> Result<Box<Plan>, ParseError> {
     let mut expr = QueryParser::new().parse(&query_text)?;
     label_exprs(&mut expr);
     eprintln!("labeled expr: {:?}", expr);

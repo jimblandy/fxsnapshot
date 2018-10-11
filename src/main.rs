@@ -40,7 +40,7 @@ fn run() -> Result<(), Error> {
     }
 
     let query_text = args[1].to_string_lossy().into_owned();
-    let query = query::parse(&query_text)
+    let query = query::compile(&query_text)
         .map_err(|e| format_err!("{}", e))?;
 
     let path = Path::new(&args[0]);
