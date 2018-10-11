@@ -1,7 +1,7 @@
 Git is the backtrace; this is the continuation.
 
 * small
-- [ ] understand what that weak reference is doing
+- [ ] get rid of test in main.rs
 - [ ] "grammar.lalrpop" is a redundant name
 - [ ] improved output formats for values, more recognizable for general users
 - [ ] better layout / pretty-printing
