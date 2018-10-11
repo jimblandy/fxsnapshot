@@ -13,7 +13,7 @@ pub enum Expr {
 
     Var(Var),
     App { arg: Box<Expr>, fun: Box<Expr> },
-    Lambda { id: LambdaId, var: String, body: Box<Expr> },
+    Lambda { id: LambdaId, vars: Vec<String>, body: Box<Expr> },
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
