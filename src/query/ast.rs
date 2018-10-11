@@ -13,11 +13,11 @@ pub enum Expr {
 
     Var(Var),
     App { arg: Box<Expr>, fun: Box<Expr> },
-    Lambda { id: ExprId, var: String, body: Box<Expr> },
+    Lambda { id: LambdaId, var: String, body: Box<Expr> },
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct ExprId(pub usize);
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+pub struct LambdaId(pub usize);
 
 #[derive(Clone, Debug)]
 pub enum Var {
@@ -30,7 +30,7 @@ pub enum Var {
     Root,
 
     // Reference to a global or local variable.
-    Id { id: ExprId, name: String },
+    Id { id: LambdaId, name: String },
 }
 
 #[derive(Clone, Debug)]
@@ -123,12 +123,18 @@ trait ExprWalkerMut {
 }
 
 struct ExprLabeler {
-    next_id: ExprId,
+    next_id: LambdaId,
 }
 
 impl ExprLabeler {
     fn new() -> ExprLabeler {
-        ExprLabeler { next_id: ExprId(0) }
+        ExprLabeler { next_id: LambdaId(0) }
+    }
+
+    fn next(&mut self) -> LambdaId {
+        let result = self.next_id;
+        self.next_id = LambdaId(self.next_id.0 + 1);
+        result
     }
 }
 
@@ -137,8 +143,7 @@ impl ExprWalkerMut for ExprLabeler {
     fn visit_expr(&mut self, expr: &mut Expr) -> Result<(), Self::Error> {
         match expr {
             Expr::Lambda { id, .. } | Expr::Var(Var::Id { id, .. }) => {
-                *id = self.next_id;
-                self.next_id = ExprId(self.next_id.0 + 1);
+                *id = self.next();
             }
             _ => ()
         }

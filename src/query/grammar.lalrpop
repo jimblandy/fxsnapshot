@@ -4,7 +4,7 @@ use query::ast::{denoted_string,
                  denoted_regex,
                  Builder,
                  Expr,
-                 ExprId,
+                 LambdaId,
                  Var,
                  Predicate,
                  PredicateOp};
@@ -76,11 +76,11 @@ Var: Var = {
     "root" => Var::Root,
 
     // Reference to a global or local variable.
-    <Id> => Var::Id { name: <>, id: ExprId(0) },
+    <Id> => Var::Id { name: <>, id: LambdaId(0) },
 };
 
 Lambda: Box<Expr> = "|" <var: Id> "|" <body: Expr<"">> =>
-    Box::new(Expr::Lambda { var, body, id: ExprId(0) });
+    Box::new(Expr::Lambda { var, body, id: LambdaId(0) });
 
 PredicateOp: PredicateOp = {
     "find" => PredicateOp::Find,
