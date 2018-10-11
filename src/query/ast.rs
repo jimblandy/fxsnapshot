@@ -67,7 +67,7 @@ pub enum Predicate {
 /// Also, there's more than one way to walk a tree, so consider dividing this
 /// into several traits that walk and propagate values in whatever way makes the
 /// users clearest, rather than letting it slouch into something too neutral.
-trait ExprWalkerMut {
+pub trait ExprWalkerMut {
     type Error;
 
     fn visit_expr(&mut self, expr: &mut Expr) -> Result<(), Self::Error> {
@@ -123,50 +123,6 @@ trait ExprWalkerMut {
             },
         }
     }
-}
-
-#[derive(Default)]
-struct ExprLabeler {
-    next_lambda: usize,
-    next_var: usize,
-}
-
-impl ExprLabeler {
-    fn new() -> ExprLabeler {
-        ExprLabeler::default()
-    }
-
-    fn next_lambda(&mut self) -> LambdaId {
-        let next = self.next_lambda;
-        self.next_lambda = next + 1;
-        LambdaId(next)
-    }
-
-    fn next_var(&mut self) -> UseId {
-        let next = self.next_var;
-        self.next_var = next + 1;
-        UseId(next)
-    }
-}
-
-impl ExprWalkerMut for ExprLabeler {
-    type Error = ();
-    fn visit_expr(&mut self, expr: &mut Expr) -> Result<(), Self::Error> {
-        match expr {
-            Expr::Lambda { id, .. } => {
-                *id = self.next_lambda();
-            }
-            Expr::Var(Var::Lexical { id, .. }) => {
-                *id = self.next_var();
-            }
-            _ => ()
-        }
-        self.visit_expr_children(expr)
-    }
-}
-
-pub fn label_exprs(expr: &mut Expr) {
-    ExprLabeler::new().visit_expr(expr).unwrap();
 }
 
 pub type Builder = Box<FnBox(Box<Expr>) -> Box<Expr>>;

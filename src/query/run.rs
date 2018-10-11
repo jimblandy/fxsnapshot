@@ -9,7 +9,7 @@ use fallible_iterator::{self, FallibleIterator};
 use regex;
 
 use dump::{CoreDump, Edge, Node, NodeId};
-use super::ast::{Expr, Predicate, PredicateOp, Var};
+use super::ast::{Expr, ExprWalkerMut, LambdaId, Predicate, PredicateOp, UseId, Var};
 use super::breadth_first::{BreadthFirst, Step};
 use super::value::{self, EvalResult, Value, Stream, TryUnwrap};
 
@@ -34,6 +34,50 @@ pub trait PredicatePlan {
 
 pub struct DynEnv<'a> {
     pub dump: &'a CoreDump<'a>
+}
+
+#[derive(Default)]
+struct ExprLabeler {
+    next_lambda: usize,
+    next_use: usize,
+}
+
+impl ExprLabeler {
+    fn new() -> ExprLabeler {
+        ExprLabeler::default()
+    }
+
+    fn next_lambda(&mut self) -> LambdaId {
+        let next = self.next_lambda;
+        self.next_lambda = next + 1;
+        LambdaId(next)
+    }
+
+    fn next_use(&mut self) -> UseId {
+        let next = self.next_use;
+        self.next_use = next + 1;
+        UseId(next)
+    }
+}
+
+impl ExprWalkerMut for ExprLabeler {
+    type Error = ();
+    fn visit_expr(&mut self, expr: &mut Expr) -> Result<(), Self::Error> {
+        match expr {
+            Expr::Lambda { id, .. } => {
+                *id = self.next_lambda();
+            }
+            Expr::Var(Var::Lexical { id, .. }) => {
+                *id = self.next_use();
+            }
+            _ => ()
+        }
+        self.visit_expr_children(expr)
+    }
+}
+
+pub fn label_exprs(expr: &mut Expr) {
+    ExprLabeler::new().visit_expr(expr).unwrap();
 }
 
 /// Given the expression `expr`, return a `Plan` that will evaluate it.

@@ -58,7 +58,7 @@ pub use self::grammar::Token;
 pub use self::run::{Plan, DynEnv};
 pub use self::value::Value;
 
-use self::ast::label_exprs;
+use self::run::label_exprs;
 
 pub type ParseError<'input> = lalrpop_util::ParseError<usize, Token<'input>, &'static str>;
 
