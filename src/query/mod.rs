@@ -47,6 +47,7 @@
 //! [value](value/enum.Value.html)
 mod ast;
 mod breadth_first;
+mod env;
 mod run;
 mod value;
 mod walkers;
@@ -70,5 +71,13 @@ pub fn compile(query_text: &str) -> Result<Box<Plan>, ParseError> {
     let mut expr = QueryParser::new().parse(&query_text)?;
     label_exprs(&mut expr);
     eprintln!("labeled expr: {:?}", expr);
+    env::debug_captures(&expr);
     Ok(plan_expr(&expr))
+}
+
+/// An error raised during query planning.
+#[derive(Clone, Fail, Debug)]
+pub enum StaticError {
+    #[fail(display = "unbound variable '{}'", name)]
+    UnboundVar { name: String },
 }
