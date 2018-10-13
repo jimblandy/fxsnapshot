@@ -49,6 +49,7 @@ mod ast;
 mod breadth_first;
 mod env;
 mod run;
+mod test;
 mod value;
 mod walkers;
 

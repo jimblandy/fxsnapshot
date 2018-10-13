@@ -24,14 +24,6 @@ use dump::CoreDump;
 use std::fs::File;
 use std::path::Path;
 
-#[test]
-fn parse_query() {
-    query::ExprParser::new().parse("root")
-        .expect("parse failed");
-    query::ExprParser::new().parse("nodes { id: 0x0123456789abcdef }")
-        .expect("parse failed");
-}
-
 fn run() -> Result<(), Error> {
     let args = std::env::args_os().skip(1).collect::<Vec<_>>();
 
