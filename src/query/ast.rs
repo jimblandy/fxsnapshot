@@ -2,6 +2,7 @@
 
 use regex;
 use std::boxed::FnBox;
+use std::fmt;
 
 #[derive(Clone, Debug)]
 pub enum Expr {
@@ -16,13 +17,25 @@ pub enum Expr {
     Lambda { id: LambdaId, formals: Vec<String>, body: Box<Expr> },
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Copy, Eq, PartialEq, Hash)]
 pub struct LambdaId(pub usize);
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+impl fmt::Debug for LambdaId {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(fmt, "λ{:?}", self.0)
+    }
+}
+
+#[derive(Clone, Copy, Eq, PartialEq, Hash)]
 pub struct UseId(pub usize);
 
-#[derive(Clone, Debug)]
+impl fmt::Debug for UseId {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(fmt, "↑{:?}", self.0)
+    }
+}
+
+#[derive(Clone)]
 pub enum Var {
     // Special names of built-in operators. For now, these are reserved words,
     // not globals.
@@ -34,6 +47,22 @@ pub enum Var {
 
     // Reference to a global or local variable.
     Lexical { id: UseId, name: String },
+}
+
+impl fmt::Debug for Var {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        let simple = match self {
+            Var::Edges => "edges",
+            Var::First => "first",
+            Var::Nodes => "nodes",
+            Var::Paths => "paths",
+            Var::Root => "root",
+            Var::Lexical { id, name } => {
+                return write!(fmt, "{:?}:{:?})", id, name);
+            }
+        };
+        fmt.write_str(simple)
+    }
 }
 
 #[derive(Clone, Debug)]
