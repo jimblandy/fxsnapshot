@@ -80,8 +80,8 @@ Var: Var = {
     <Id> => Var::Lexical { name: <>, id: UseId(0) },
 };
 
-Lambda: Box<Expr> = "|" <vars: Comma<Id>> "|" <body: Expr<"">> =>
-    Box::new(Expr::Lambda { vars, body, id: LambdaId(0) });
+Lambda: Box<Expr> = "|" <formals: Comma<Id>> "|" <body: Expr<"">> =>
+    Box::new(Expr::Lambda { formals, body, id: LambdaId(0) });
 
 PredicateOp: PredicateOp = {
     "find" => PredicateOp::Find,
