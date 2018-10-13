@@ -1,6 +1,7 @@
 Git is the backtrace; this is the continuation.
 
 * small
+- [ ] rearrange into parse, analyze, plan; put `Plan` and `DynEnv` in `query/mod.rs`.
 - [ ] get rid of test in main.rs
 - [ ] "grammar.lalrpop" is a redundant name
 - [ ] improved output formats for values, more recognizable for general users
@@ -45,6 +46,8 @@ Git is the backtrace; this is the continuation.
 - [ ] specify our own trait for formatting values?
 - [ ] Use From<&[u8]> instead of FromDumpBytes?
 - [ ] should paths be their own type? might be nice
+- [ ] rustfmt
+- [ ] install clippy
 ** closures
 - [ ] multi-argument closures
 - [ ] retain only those values actually captured
