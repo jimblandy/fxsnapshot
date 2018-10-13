@@ -9,9 +9,10 @@ use fallible_iterator::{self, FallibleIterator};
 use regex;
 
 use dump::{CoreDump, Edge, Node, NodeId};
-use super::ast::{Expr, ExprWalkerMut, LambdaId, Predicate, PredicateOp, UseId, Var};
+use super::ast::{Expr, LambdaId, Predicate, PredicateOp, UseId, Var};
 use super::breadth_first::{BreadthFirst, Step};
 use super::value::{self, EvalResult, Value, Stream, TryUnwrap};
+use super::walkers::ExprWalkerMut;
 
 use std::iter::once;
 
@@ -60,9 +61,9 @@ impl ExprLabeler {
     }
 }
 
-impl ExprWalkerMut for ExprLabeler {
+impl<'e> ExprWalkerMut<'e> for ExprLabeler {
     type Error = ();
-    fn visit_expr(&mut self, expr: &mut Expr) -> Result<(), Self::Error> {
+    fn visit_expr(&mut self, expr: &'e mut Expr) -> Result<(), ()> {
         match expr {
             Expr::Lambda { id, .. } => {
                 *id = self.next_lambda();
