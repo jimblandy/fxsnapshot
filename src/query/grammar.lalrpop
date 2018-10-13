@@ -90,7 +90,7 @@ PredicateOp: PredicateOp = {
 
 Predicate: Predicate = {
     <PrimaryPredicate>,
-    <left: Predicate> "||" <right: PrimaryPredicate> => {
+    <left: Predicate> "or" <right: PrimaryPredicate> => {
         match left {
             Predicate::Or(mut predicates) => {
                 predicates.push(right);
@@ -99,7 +99,7 @@ Predicate: Predicate = {
             _ => Predicate::Or(vec![left, right])
         }
     },
-    <left: Predicate> "&&" <right: PrimaryPredicate> => {
+    <left: Predicate> "and" <right: PrimaryPredicate> => {
         match left {
             Predicate::And(mut predicates) => {
                 predicates.push(right);
