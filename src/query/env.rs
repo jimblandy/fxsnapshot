@@ -37,7 +37,7 @@ struct CaptureMap<'expr> {
 
     /// The set of variables we've seen used so far within the innermost lambda
     /// at this point in the traversal.
-    captured: HashSet<VarAddr>
+    free: HashSet<VarAddr>
 }
 
 impl<'e> CaptureMap<'e> {
@@ -66,19 +66,19 @@ impl<'expr> ExprWalker<'expr> for CaptureMap<'expr> {
                 eprintln!("visiting use {:?}", id);
                 if let Some(addr) = self.find_var(name) {
                     self.uses.insert(id, addr);
-                    self.captured.insert(addr);
+                    self.free.insert(addr);
                 } else {
                     return Err(StaticError::UnboundVar { name: name.to_owned() });
                 }
                 Ok(())
             }
             &Expr::Lambda { id, ref formals, .. } => {
-                // When we recurse, we want to find the set of captured
+                // When we recurse, we want to find the set of free
                 // variables for this lambda alone. Create a fresh `HashSet`,
-                // and drop it in as our `captured` while we walk this lambda's
+                // and drop it in as our `free` while we walk this lambda's
                 // body. We'll union its contents into our enclosing lambda's
-                // captured set when we're done.
-                let parent_captured = replace(&mut self.captured, HashSet::new());
+                // free set when we're done.
+                let parent_free = replace(&mut self.free, HashSet::new());
 
                 // Add this lambda's formals to the current list of scopes,
                 // so references in the lambda's body can see them.
@@ -94,16 +94,16 @@ impl<'expr> ExprWalker<'expr> for CaptureMap<'expr> {
 
                 // References to this lambda's formals within its body are not
                 // 'free', so drop them.
-                self.captured.retain(|addr| addr.lambda != id);
+                self.free.retain(|addr| addr.lambda != id);
 
-                // Take out our captured set, and put the parent's back in place.
-                let captured = replace(&mut self.captured, parent_captured);
+                // Take out our free set, and put the parent's back in place.
+                let free = replace(&mut self.free, parent_free);
 
                 // Include this lambda's free variables in the parent's set.
-                self.captured.extend(&captured);
+                self.free.extend(&free);
 
-                // Record this lambda's captured set.
-                self.lambdas.insert(id, captured);
+                // Record this lambda's free set.
+                self.lambdas.insert(id, free);
 
                 // kthx
                 Ok(())
