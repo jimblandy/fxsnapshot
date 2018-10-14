@@ -119,3 +119,105 @@ pub fn debug_captures(expr: &Expr) {
         .expect("error mapping captures");
     eprintln!("{:#?}", capture_map);
 }
+
+#[cfg(test)]
+mod test {
+    use super::{CaptureMap, VarAddr};
+    use query::StaticError;
+    use query::ast::{Expr, LambdaId, UseId};
+    use query::test_utils::*;
+    use query::walkers::ExprWalker;
+    use std::collections::{HashMap, HashSet};
+    use std::iter::FromIterator;
+
+    fn varaddr(lambda: usize, index: usize) -> VarAddr {
+        VarAddr {
+            lambda: LambdaId(lambda),
+            index
+        }
+    }
+
+    fn make_capture_map(expr: &Expr) -> Result<CaptureMap, StaticError> {
+        let mut cm = CaptureMap::new();
+        cm.visit_expr(expr)?;
+
+        // These should always be empty at the end of any traversal.
+        assert!(cm.scopes.is_empty());
+        assert!(cm.free.is_empty());
+
+        Ok(cm)
+    }
+
+    #[test]
+    fn trivial() {
+        let expr = root();
+        let cm = make_capture_map(&expr).expect("map capture");
+        assert!(cm.lambdas.is_empty());
+        assert!(cm.uses.is_empty());
+    }
+
+    #[test]
+    fn single_lambda() {
+        let expr = lambda(70, &["x", "y", "z"],
+                          app(var(38, "y"), var(92, "z")));
+        let cm = make_capture_map(&expr).expect("map capture");
+        assert_eq!(cm.lambdas,
+                   HashMap::from_iter(vec![
+                       (LambdaId(70), HashSet::new()) // no free variables
+                   ]));
+        assert_eq!(cm.uses,
+                   HashMap::from_iter(vec![
+                       (UseId(38), varaddr(70, 1)),
+                       (UseId(92), varaddr(70, 2))
+                   ]));
+    }
+
+    #[test]
+    fn two_lambdas() {
+        let expr = lambda(208, &["x", "y"],
+                          lambda(193, &["z", "w"],
+                                 app(var(215, "y"), var(50, "z"))));
+        let cm = make_capture_map(&expr).expect("map capture");
+        assert_eq!(cm.lambdas,
+                   HashMap::from_iter(vec![
+                       (LambdaId(208), HashSet::new()), // no free variables
+                       (LambdaId(193), HashSet::from_iter(vec![varaddr(208, 1)]))
+                   ]));
+        assert_eq!(cm.uses,
+                   HashMap::from_iter(vec![
+                       (UseId(215), varaddr(208, 1)),
+                       (UseId(50), varaddr(193, 0))
+                   ]));
+    }
+
+    #[test]
+    fn three_lambdas() {
+        // |a,b| |c,d| b d (|a,d| (a b c d))
+        let expr = lambda(152, &["a", "b"],
+                          lambda(30, &["c", "d"],
+                                 app(app(var(9, "b"),
+                                         var(179, "d")),
+                                     lambda(106, &["a", "d"],
+                                            app(app(app(var(89, "a"),
+                                                        var(109, "b")),
+                                                    var(57, "c")),
+                                                var(161, "d"))))));
+        let cm = make_capture_map(&expr).expect("map capture");
+        assert_eq!(cm.lambdas,
+                   HashMap::from_iter(vec![
+                       (LambdaId(152), HashSet::new()), // no free variables
+                       (LambdaId(30),  HashSet::from_iter(vec![varaddr(152, 1)])),
+                       (LambdaId(106), HashSet::from_iter(vec![varaddr(152, 1),
+                                                               varaddr(30, 0)])),
+                   ]));
+        assert_eq!(cm.uses,
+                   HashMap::from_iter(vec![
+                       (UseId(9), varaddr(152, 1)),
+                       (UseId(179), varaddr(30, 1)),
+                       (UseId(89), varaddr(106, 0)),
+                       (UseId(109), varaddr(152, 1)),
+                       (UseId(57), varaddr(30, 0)),
+                       (UseId(161), varaddr(106, 1)),
+                   ]));
+    }
+}
