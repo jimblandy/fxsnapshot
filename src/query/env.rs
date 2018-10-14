@@ -63,7 +63,6 @@ impl<'expr> ExprWalker<'expr> for CaptureMap<'expr> {
     fn visit_expr(&mut self, expr: &'expr Expr) -> Result<(), StaticError> {
         match expr {
             &Expr::Var(Var::Lexical { id, ref name }) => {
-                eprintln!("visiting use {:?}", id);
                 if let Some(addr) = self.find_var(name) {
                     self.uses.insert(id, addr);
                     self.free.insert(addr);
@@ -83,8 +82,6 @@ impl<'expr> ExprWalker<'expr> for CaptureMap<'expr> {
                 // Add this lambda's formals to the current list of scopes,
                 // so references in the lambda's body can see them.
                 self.scopes.push((id, formals));
-
-                eprintln!("Entering body of {:?}: {:?}", id, self);
 
                 // Process the body of this lambda.
                 self.visit_expr_children(expr)?;
