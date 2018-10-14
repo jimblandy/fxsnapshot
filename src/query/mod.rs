@@ -60,9 +60,9 @@ mod grammar {
 }
 
 pub use self::grammar::Token;
-pub use self::run::{Plan, DynEnv};
-pub use self::value::Value;
+pub use self::value::{EvalResult, Value};
 
+use dump::CoreDump;
 use self::run::label_exprs;
 
 pub type ParseError<'input> = lalrpop_util::ParseError<usize, Token<'input>, &'static str>;
@@ -83,4 +83,25 @@ pub fn compile(query_text: &str) -> Result<Box<Plan>, ParseError> {
 pub enum StaticError {
     #[fail(display = "unbound variable '{}'", name)]
     UnboundVar { name: String },
+}
+
+/// A plan of evaluation. We translate each query expression into a tree of
+/// `Plan` values, which serve as the code for a sort of indirect-threaded
+/// interpreter.
+pub trait Plan {
+    /// Evaluate code for some expression, yielding either a `T` value or an
+    /// error. Consult `DynEnv` for random contextual information like the
+    /// current `CoreDump`.
+    fn run<'a>(&'a self, dye: &'a DynEnv<'a>) -> EvalResult<'a>;
+}
+
+/// A plan for evaluating a predicate on a `Value`.
+pub trait PredicatePlan {
+    /// Determine whether this predicate matches `value`. Consult `DynEnv` for
+    /// random contextual information like the current `CoreDump`.
+    fn test<'a>(&'a self, dye: &'a DynEnv<'a>, &Value<'a>) -> Result<bool, value::Error>;
+}
+
+pub struct DynEnv<'a> {
+    pub dump: &'a CoreDump<'a>
 }

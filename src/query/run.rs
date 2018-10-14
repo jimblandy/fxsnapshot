@@ -8,34 +8,14 @@
 use fallible_iterator::{self, FallibleIterator};
 use regex;
 
-use dump::{CoreDump, Edge, Node, NodeId};
+use dump::{Edge, Node, NodeId};
+use super::{DynEnv, Plan, PredicatePlan};
 use super::ast::{Expr, LambdaId, Predicate, PredicateOp, UseId, Var};
 use super::breadth_first::{BreadthFirst, Step};
 use super::value::{self, EvalResult, Value, Stream, TryUnwrap};
 use super::walkers::ExprWalkerMut;
 
 use std::iter::once;
-
-/// A plan of evaluation. We translate each query expression into a tree of
-/// `Plan` values, which serve as the code for a sort of indirect-threaded
-/// interpreter.
-pub trait Plan {
-    /// Evaluate code for some expression, yielding either a `T` value or an
-    /// error. Consult `DynEnv` for random contextual information like the
-    /// current `CoreDump`.
-    fn run<'a>(&'a self, dye: &'a DynEnv<'a>) -> EvalResult<'a>;
-}
-
-/// A plan for evaluating a predicate on a `Value`.
-pub trait PredicatePlan {
-    /// Determine whether this predicate matches `value`. Consult `DynEnv` for
-    /// random contextual information like the current `CoreDump`.
-    fn test<'a>(&'a self, dye: &'a DynEnv<'a>, &Value<'a>) -> Result<bool, value::Error>;
-}
-
-pub struct DynEnv<'a> {
-    pub dump: &'a CoreDump<'a>
-}
 
 #[derive(Default)]
 struct ExprLabeler {
