@@ -4,7 +4,7 @@ use regex;
 use std::boxed::FnBox;
 use std::fmt;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Expr {
     Number(u64),
     String(String),
@@ -35,7 +35,7 @@ impl fmt::Debug for UseId {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Eq, PartialEq)]
 pub enum Var {
     // Special names of built-in operators. For now, these are reserved words,
     // not globals.
@@ -65,7 +65,7 @@ impl fmt::Debug for Var {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum PredicateOp {
     Find,
     Filter,
@@ -84,6 +84,29 @@ pub enum Predicate {
     Or(Vec<Predicate>),
     Not(Box<Predicate>),
 }
+
+impl PartialEq for Predicate {
+    fn eq(&self, other: &Predicate) -> bool {
+        match (self, other) {
+            (Predicate::Expr(lhs), Predicate::Expr(rhs)) => lhs == rhs,
+            (Predicate::Field(lhsn, lhsp), Predicate::Field(rhsn, rhsp)) => {
+                lhsn == rhsn && lhsp == rhsp
+            }
+            (Predicate::Ends(lhs), Predicate::Ends(rhs)) => lhs == rhs,
+            (Predicate::Any(lhs), Predicate::Any(rhs)) => lhs == rhs,
+            (Predicate::All(lhs), Predicate::All(rhs)) => lhs == rhs,
+            (Predicate::Regex(lhs), Predicate::Regex(rhs)) => {
+                lhs.as_str() == rhs.as_str()
+            }
+            (Predicate::And(lhs), Predicate::And(rhs)) => lhs == rhs,
+            (Predicate::Or(lhs), Predicate::Or(rhs)) => lhs == rhs,
+            (Predicate::Not(lhs), Predicate::Not(rhs)) => lhs == rhs,
+            _ => false,
+        }
+    }
+}
+
+impl Eq for Predicate { }
 
 pub type Builder = Box<FnBox(Box<Expr>) -> Box<Expr>>;
 
