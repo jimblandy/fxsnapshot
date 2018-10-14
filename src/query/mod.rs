@@ -49,9 +49,11 @@ mod ast;
 mod breadth_first;
 mod env;
 mod run;
-mod test;
 mod value;
 mod walkers;
+
+mod test_utils;
+mod test;
 
 mod grammar {
     include!(concat!(env!("OUT_DIR"), "/query/grammar.rs"));
