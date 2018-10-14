@@ -1,7 +1,10 @@
 Git is the backtrace; this is the continuation.
 
-* small
+* visible cleanups
+- [ ] report errors from lexing (denoted_regex, denoted_string)
+* invisible cleanups
 - [ ] rearrange into parse, analyze, plan; put `Plan` and `DynEnv` in `query/mod.rs`.
+* small
 - [ ] get rid of test in main.rs
 - [ ] "grammar.lalrpop" is a redundant name
 - [ ] improved output formats for values, more recognizable for general users
