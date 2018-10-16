@@ -65,12 +65,16 @@ pub type ParseError<'input> = lalrpop_util::ParseError<usize, Token<'input>, &'s
 use self::grammar::QueryParser;
 use self::run::plan_expr;
 
+use std::fmt;
+
 pub fn compile(query_text: &str) -> Result<Box<Plan>, ParseError> {
     let mut expr = QueryParser::new().parse(&query_text)?;
     label_exprs(&mut expr);
     eprintln!("labeled expr: {:?}", expr);
     env::debug_captures(&expr);
-    Ok(plan_expr(&expr))
+    let plan = plan_expr(&expr);
+    eprintln!("plan: {:#?}", plan);
+    Ok(plan)
 }
 
 /// An error raised during query planning.
@@ -83,7 +87,7 @@ pub enum StaticError {
 /// A plan of evaluation. We translate each query expression into a tree of
 /// `Plan` values, which serve as the code for a sort of indirect-threaded
 /// interpreter.
-pub trait Plan {
+pub trait Plan: fmt::Debug {
     /// Evaluate code for some expression, yielding either a `T` value or an
     /// error. Consult `DynEnv` for random contextual information like the
     /// current `CoreDump`.
@@ -91,7 +95,7 @@ pub trait Plan {
 }
 
 /// A plan for evaluating a predicate on a `Value`.
-pub trait PredicatePlan {
+pub trait PredicatePlan: fmt::Debug {
     /// Determine whether this predicate matches `value`. Consult `DynEnv` for
     /// random contextual information like the current `CoreDump`.
     fn test<'a>(&'a self, dye: &'a DynEnv<'a>, &Value<'a>) -> Result<bool, value::Error>;

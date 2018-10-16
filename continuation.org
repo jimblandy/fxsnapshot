@@ -6,7 +6,6 @@ Git is the backtrace; this is the continuation.
 %%%% = big
 
 * internal cleanups
-- [ ] % impl Debug for Plan
 - [ ] %% Use From<&[u8]> instead of FromDumpBytes?
 - [ ] %% rustfmt
 - [ ] %% install clippy

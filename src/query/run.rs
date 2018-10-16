@@ -15,6 +15,7 @@ use super::breadth_first::{BreadthFirst, Step};
 use super::value::{self, EvalResult, Value, Stream, TryUnwrap};
 use super::walkers::ExprWalkerMut;
 
+use std::fmt;
 use std::iter::once;
 
 #[derive(Default)]
@@ -258,9 +259,10 @@ fn splice<T: Clone>(slice: &[T], i: usize, v: Vec<T>) -> Vec<T> {
     }
 }
 
-struct Const<T>(T);
+#[derive(Debug)]
+struct Const<T: fmt::Debug>(T);
 
-impl<T> Plan for Const<T>
+impl<T: fmt::Debug> Plan for Const<T>
     where T: Clone,
           for<'a> Value<'a>: From<T>
 {
@@ -269,6 +271,7 @@ impl<T> Plan for Const<T>
     }
 }
 
+#[derive(Debug)]
 struct StreamLiteral(Vec<Box<Plan>>);
 
 impl Plan for StreamLiteral {
@@ -278,6 +281,7 @@ impl Plan for StreamLiteral {
     }
 }
 
+#[derive(Debug)]
 struct First(Box<Plan>);
 impl Plan for First {
     fn run<'a>(&'a self, dye: &'a DynEnv<'a>) -> EvalResult<'a> {
@@ -290,6 +294,7 @@ impl Plan for First {
     }
 }
 
+#[derive(Debug)]
 struct Root;
 impl Plan for Root {
     fn run<'a>(&'a self, dye: &'a DynEnv<'a>) -> EvalResult<'a> {
@@ -297,6 +302,7 @@ impl Plan for Root {
     }
 }
 
+#[derive(Debug)]
 struct Nodes;
 impl Plan for Nodes {
     fn run<'a>(&'a self, dye: &'a DynEnv<'a>) -> EvalResult<'a> {
@@ -305,6 +311,7 @@ impl Plan for Nodes {
     }
 }
 
+#[derive(Debug)]
 struct NodesById(Box<Plan>);
 impl Plan for NodesById {
     fn run<'a>(&'a self, dye: &'a DynEnv<'a>) -> EvalResult<'a> {
@@ -316,6 +323,7 @@ impl Plan for NodesById {
     }
 }
 
+#[derive(Debug)]
 struct Edges(Box<Plan>);
 impl Plan for Edges {
     fn run<'a>(&'a self, dye: &'a DynEnv<'a>) -> EvalResult<'a> {
@@ -327,6 +335,7 @@ impl Plan for Edges {
     }
 }
 
+#[derive(Debug)]
 struct Filter {
     stream: Box<Plan>,
     filter: Box<PredicatePlan>,
@@ -340,6 +349,7 @@ impl Plan for Filter {
     }
 }
 
+#[derive(Debug)]
 struct Paths(Box<Plan>);
 impl Plan for Paths {
     fn run<'a>(&'a self, dye: &'a DynEnv<'a>) -> EvalResult<'a> {
@@ -387,6 +397,7 @@ impl Plan for Paths {
     }
 }
 
+#[derive(Debug)]
 struct EqualPredicate(Box<Plan>);
 impl PredicatePlan for EqualPredicate {
     fn test<'a>(&'a self, dye: &'a DynEnv<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
@@ -395,6 +406,7 @@ impl PredicatePlan for EqualPredicate {
     }
 }
 
+#[derive(Debug)]
 struct FieldPredicate {
     field_name: String,
     predicate: Box<PredicatePlan>,
@@ -447,6 +459,7 @@ fn get_edge_field<'v>(edge: &'v Edge, field: &str)
     })
 }
 
+#[derive(Debug)]
 struct Ends(Box<PredicatePlan>);
 impl PredicatePlan for Ends {
     fn test<'a>(&'a self, dye: &'a DynEnv<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
@@ -456,6 +469,7 @@ impl PredicatePlan for Ends {
     }
 }
 
+#[derive(Debug)]
 struct Regex(regex::Regex);
 impl PredicatePlan for Regex {
     fn test<'a>(&'a self, _dye: &'a DynEnv<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
@@ -464,6 +478,7 @@ impl PredicatePlan for Regex {
     }
 }
 
+#[derive(Debug)]
 struct And(Vec<Box<PredicatePlan>>);
 impl PredicatePlan for And {
     fn test<'a>(&'a self, dye: &'a DynEnv<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
@@ -472,6 +487,7 @@ impl PredicatePlan for And {
     }
 }
 
+#[derive(Debug)]
 struct Or(Vec<Box<PredicatePlan>>);
 impl PredicatePlan for Or {
     fn test<'a>(&'a self, dye: &'a DynEnv<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
@@ -480,6 +496,7 @@ impl PredicatePlan for Or {
     }
 }
 
+#[derive(Debug)]
 struct Not(Box<PredicatePlan>);
 impl PredicatePlan for Not {
     fn test<'a>(&'a self, dye: &'a DynEnv<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
@@ -540,6 +557,7 @@ fn plan_junction<J: BlahJunction>(subterms: &[Predicate]) -> PlanOrTrivial {
     }
 }
 
+#[derive(Debug)]
 struct Any(Box<PredicatePlan>);
 impl PredicatePlan for Any {
     fn test<'a>(&'a self, dye: &'a DynEnv<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
@@ -548,6 +566,7 @@ impl PredicatePlan for Any {
     }
 }
 
+#[derive(Debug)]
 struct All(Box<PredicatePlan>);
 impl PredicatePlan for All {
     fn test<'a>(&'a self, dye: &'a DynEnv<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
@@ -556,6 +575,7 @@ impl PredicatePlan for All {
     }
 }
 
+#[derive(Debug)]
 struct Empty;
 impl PredicatePlan for Empty {
     fn test<'a>(&'a self, _dye: &'a DynEnv<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
@@ -564,6 +584,7 @@ impl PredicatePlan for Empty {
     }
 }
 
+#[derive(Debug)]
 struct NonEmpty;
 impl PredicatePlan for NonEmpty {
     fn test<'a>(&'a self, _dye: &'a DynEnv<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
