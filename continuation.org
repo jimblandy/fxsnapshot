@@ -6,7 +6,6 @@ Git is the backtrace; this is the continuation.
 %%%% = big
 
 * internal cleanups
-- [ ] %% rustfmt
 - [ ] %% install clippy
 - [ ] %% use interned atoms for identifiers, instead of strings (crate string_cache?)
 - [ ] %% Change `Stream<'a>` to `Stream<T>`, make `Stream` independent?

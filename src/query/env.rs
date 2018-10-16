@@ -1,6 +1,6 @@
-use super::StaticError;
 use super::ast::{Expr, LambdaId, UseId, Var};
 use super::walkers::ExprWalker;
+use super::StaticError;
 
 use std::collections::{HashMap, HashSet};
 use std::fmt;
@@ -37,7 +37,7 @@ struct CaptureMap<'expr> {
 
     /// The set of variables we've seen used so far within the innermost lambda
     /// at this point in the traversal.
-    free: HashSet<VarAddr>
+    free: HashSet<VarAddr>,
 }
 
 impl<'e> CaptureMap<'e> {
@@ -50,7 +50,10 @@ impl<'e> CaptureMap<'e> {
     fn find_var(&self, name: &str) -> Option<VarAddr> {
         for &(lambda_id, ref formals) in self.scopes.iter().rev() {
             if let Some(index) = formals.iter().position(|s| s == name) {
-                return Some(VarAddr { lambda: lambda_id, index });
+                return Some(VarAddr {
+                    lambda: lambda_id,
+                    index,
+                });
             }
         }
         None
@@ -67,11 +70,15 @@ impl<'expr> ExprWalker<'expr> for CaptureMap<'expr> {
                     self.uses.insert(id, addr);
                     self.free.insert(addr);
                 } else {
-                    return Err(StaticError::UnboundVar { name: name.to_owned() });
+                    return Err(StaticError::UnboundVar {
+                        name: name.to_owned(),
+                    });
                 }
                 Ok(())
             }
-            &Expr::Lambda { id, ref formals, .. } => {
+            &Expr::Lambda {
+                id, ref formals, ..
+            } => {
                 // When we recurse, we want to find the set of free
                 // variables for this lambda alone. Create a fresh `HashSet`,
                 // and drop it in as our `free` while we walk this lambda's
@@ -105,14 +112,15 @@ impl<'expr> ExprWalker<'expr> for CaptureMap<'expr> {
                 // kthx
                 Ok(())
             }
-            other => self.visit_expr_children(other)
+            other => self.visit_expr_children(other),
         }
     }
 }
 
 pub fn debug_captures(expr: &Expr) {
     let mut capture_map = CaptureMap::new();
-    capture_map.visit_expr(expr)
+    capture_map
+        .visit_expr(expr)
         .expect("error mapping captures");
     eprintln!("{:#?}", capture_map);
 }
@@ -120,17 +128,17 @@ pub fn debug_captures(expr: &Expr) {
 #[cfg(test)]
 mod test {
     use super::{CaptureMap, VarAddr};
-    use query::StaticError;
     use query::ast::{Expr, LambdaId, UseId};
     use query::test_utils::*;
     use query::walkers::ExprWalker;
+    use query::StaticError;
     use std::collections::{HashMap, HashSet};
     use std::iter::FromIterator;
 
     fn varaddr(lambda: usize, index: usize) -> VarAddr {
         VarAddr {
             lambda: LambdaId(lambda),
-            index
+            index,
         }
     }
 
@@ -155,66 +163,91 @@ mod test {
 
     #[test]
     fn single_lambda() {
-        let expr = lambda(70, &["x", "y", "z"],
-                          app(var(38, "y"), var(92, "z")));
+        let expr = lambda(70, &["x", "y", "z"], app(var(38, "y"), var(92, "z")));
         let cm = make_capture_map(&expr).expect("map capture");
-        assert_eq!(cm.lambdas,
-                   HashMap::from_iter(vec![
+        assert_eq!(
+            cm.lambdas,
+            HashMap::from_iter(vec![
                        (LambdaId(70), HashSet::new()) // no free variables
-                   ]));
-        assert_eq!(cm.uses,
-                   HashMap::from_iter(vec![
-                       (UseId(38), varaddr(70, 1)),
-                       (UseId(92), varaddr(70, 2))
-                   ]));
+                   ])
+        );
+        assert_eq!(
+            cm.uses,
+            HashMap::from_iter(vec![
+                (UseId(38), varaddr(70, 1)),
+                (UseId(92), varaddr(70, 2))
+            ])
+        );
     }
 
     #[test]
     fn two_lambdas() {
-        let expr = lambda(208, &["x", "y"],
-                          lambda(193, &["z", "w"],
-                                 app(var(215, "y"), var(50, "z"))));
+        let expr = lambda(
+            208,
+            &["x", "y"],
+            lambda(193, &["z", "w"], app(var(215, "y"), var(50, "z"))),
+        );
         let cm = make_capture_map(&expr).expect("map capture");
-        assert_eq!(cm.lambdas,
-                   HashMap::from_iter(vec![
-                       (LambdaId(208), HashSet::new()), // no free variables
-                       (LambdaId(193), HashSet::from_iter(vec![varaddr(208, 1)]))
-                   ]));
-        assert_eq!(cm.uses,
-                   HashMap::from_iter(vec![
-                       (UseId(215), varaddr(208, 1)),
-                       (UseId(50), varaddr(193, 0))
-                   ]));
+        assert_eq!(
+            cm.lambdas,
+            HashMap::from_iter(vec![
+                (LambdaId(208), HashSet::new()), // no free variables
+                (LambdaId(193), HashSet::from_iter(vec![varaddr(208, 1)]))
+            ])
+        );
+        assert_eq!(
+            cm.uses,
+            HashMap::from_iter(vec![
+                (UseId(215), varaddr(208, 1)),
+                (UseId(50), varaddr(193, 0))
+            ])
+        );
     }
 
     #[test]
     fn three_lambdas() {
         // |a,b| |c,d| b d (|a,d| (a b c d))
-        let expr = lambda(152, &["a", "b"],
-                          lambda(30, &["c", "d"],
-                                 app(app(var(9, "b"),
-                                         var(179, "d")),
-                                     lambda(106, &["a", "d"],
-                                            app(app(app(var(89, "a"),
-                                                        var(109, "b")),
-                                                    var(57, "c")),
-                                                var(161, "d"))))));
+        let expr = lambda(
+            152,
+            &["a", "b"],
+            lambda(
+                30,
+                &["c", "d"],
+                app(
+                    app(var(9, "b"), var(179, "d")),
+                    lambda(
+                        106,
+                        &["a", "d"],
+                        app(
+                            app(app(var(89, "a"), var(109, "b")), var(57, "c")),
+                            var(161, "d"),
+                        ),
+                    ),
+                ),
+            ),
+        );
         let cm = make_capture_map(&expr).expect("map capture");
-        assert_eq!(cm.lambdas,
-                   HashMap::from_iter(vec![
-                       (LambdaId(152), HashSet::new()), // no free variables
-                       (LambdaId(30),  HashSet::from_iter(vec![varaddr(152, 1)])),
-                       (LambdaId(106), HashSet::from_iter(vec![varaddr(152, 1),
-                                                               varaddr(30, 0)])),
-                   ]));
-        assert_eq!(cm.uses,
-                   HashMap::from_iter(vec![
-                       (UseId(9), varaddr(152, 1)),
-                       (UseId(179), varaddr(30, 1)),
-                       (UseId(89), varaddr(106, 0)),
-                       (UseId(109), varaddr(152, 1)),
-                       (UseId(57), varaddr(30, 0)),
-                       (UseId(161), varaddr(106, 1)),
-                   ]));
+        assert_eq!(
+            cm.lambdas,
+            HashMap::from_iter(vec![
+                (LambdaId(152), HashSet::new()), // no free variables
+                (LambdaId(30), HashSet::from_iter(vec![varaddr(152, 1)])),
+                (
+                    LambdaId(106),
+                    HashSet::from_iter(vec![varaddr(152, 1), varaddr(30, 0)])
+                ),
+            ])
+        );
+        assert_eq!(
+            cm.uses,
+            HashMap::from_iter(vec![
+                (UseId(9), varaddr(152, 1)),
+                (UseId(179), varaddr(30, 1)),
+                (UseId(89), varaddr(106, 0)),
+                (UseId(109), varaddr(152, 1)),
+                (UseId(57), varaddr(30, 0)),
+                (UseId(161), varaddr(106, 1)),
+            ])
+        );
     }
 }

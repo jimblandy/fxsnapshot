@@ -8,12 +8,12 @@
 use fallible_iterator::{self, FallibleIterator};
 use regex;
 
-use dump::{Edge, Node, NodeId};
-use super::{DynEnv, Plan, PredicatePlan};
 use super::ast::{Expr, LambdaId, Predicate, PredicateOp, UseId, Var};
 use super::breadth_first::{BreadthFirst, Step};
-use super::value::{self, EvalResult, Value, Stream, TryUnwrap};
+use super::value::{self, EvalResult, Stream, TryUnwrap, Value};
 use super::walkers::ExprWalkerMut;
+use super::{DynEnv, Plan, PredicatePlan};
+use dump::{Edge, Node, NodeId};
 
 use std::fmt;
 use std::iter::once;
@@ -52,7 +52,7 @@ impl<'e> ExprWalkerMut<'e> for ExprLabeler {
             Expr::Var(Var::Lexical { id, .. }) => {
                 *id = self.next_use();
             }
-            _ => ()
+            _ => (),
         }
         self.visit_expr_children(expr)
     }
@@ -123,7 +123,7 @@ fn plan_filter(stream: &Expr, predicate: &Predicate) -> Box<Plan> {
                 stream_plan = Box::new(Nodes);
                 predicate_plan = plan_predicate(predicate);
             }
-        },
+        }
         stream => {
             stream_plan = plan_expr(stream);
             predicate_plan = plan_predicate(predicate);
@@ -140,7 +140,10 @@ fn plan_filter(stream: &Expr, predicate: &Predicate) -> Box<Plan> {
 
         // If the predicate is interesting, then filter the result from the
         // stream.
-        PlanOrTrivial::Plan(plan) => Box::new(Filter { stream: stream_plan, filter: plan }),
+        PlanOrTrivial::Plan(plan) => Box::new(Filter {
+            stream: stream_plan,
+            filter: plan,
+        }),
     }
 }
 
@@ -150,12 +153,13 @@ fn plan_filter(stream: &Expr, predicate: &Predicate) -> Box<Plan> {
 /// for executing a predicate, or the answer we know it will always return.
 enum PlanOrTrivial {
     Plan(Box<PredicatePlan>),
-    Trivial(bool)
+    Trivial(bool),
 }
 
 impl PlanOrTrivial {
     fn map_plan<F>(self, f: F) -> PlanOrTrivial
-        where F: FnOnce(Box<PredicatePlan>) -> Box<PredicatePlan>
+    where
+        F: FnOnce(Box<PredicatePlan>) -> Box<PredicatePlan>,
     {
         match self {
             PlanOrTrivial::Plan(plan) => PlanOrTrivial::Plan(f(plan)),
@@ -168,34 +172,30 @@ fn plan_predicate(predicate: &Predicate) -> PlanOrTrivial {
     use self::PlanOrTrivial::*;
     match predicate {
         Predicate::Expr(expr) => Plan(Box::new(EqualPredicate(plan_expr(expr)))),
-        Predicate::Field(field_name, sub) => {
-            plan_predicate(sub)
-                .map_plan(|predicate| Box::new(FieldPredicate {
-                    field_name: field_name.clone(),
-                    predicate
-                }))
-        }
-        Predicate::Ends(sub) => {
-            plan_predicate(sub)
-                .map_plan(|subplan| Box::new(Ends(subplan)))
-        }
+        Predicate::Field(field_name, sub) => plan_predicate(sub).map_plan(|predicate| {
+            Box::new(FieldPredicate {
+                field_name: field_name.clone(),
+                predicate,
+            })
+        }),
+        Predicate::Ends(sub) => plan_predicate(sub).map_plan(|subplan| Box::new(Ends(subplan))),
         Predicate::Any(sub) => match plan_predicate(sub) {
             PlanOrTrivial::Plan(p) => Plan(Box::new(Any(p))),
             PlanOrTrivial::Trivial(false) => Trivial(false),
             PlanOrTrivial::Trivial(true) => Plan(Box::new(NonEmpty)),
-        }
+        },
         Predicate::All(sub) => match plan_predicate(sub) {
             PlanOrTrivial::Plan(p) => Plan(Box::new(All(p))),
             PlanOrTrivial::Trivial(true) => Trivial(true),
             PlanOrTrivial::Trivial(false) => Plan(Box::new(Empty)),
-        }
+        },
         Predicate::Regex(regex) => Plan(Box::new(Regex((&**regex).clone()))),
         Predicate::And(predicates) => plan_junction::<And>(predicates),
         Predicate::Or(predicates) => plan_junction::<Or>(predicates),
         Predicate::Not(predicate) => match plan_predicate(predicate) {
             Trivial(k) => Trivial(!k),
             Plan(p) => Plan(Box::new(Not(p))),
-        }
+        },
     }
 }
 
@@ -209,9 +209,7 @@ fn plan_predicate(predicate: &Predicate) -> PlanOrTrivial {
 /// constructed afresh, since we can't modify the predicate we were handed.
 /// Since we use `Box` and not `Rc` in our parse tree, this could end up copying
 /// a lot if the remainder predicate is large.
-fn find_predicate_required_id(predicate: &Predicate)
-                              -> Option<(&Expr, Vec<Predicate>)>
-{
+fn find_predicate_required_id(predicate: &Predicate) -> Option<(&Expr, Vec<Predicate>)> {
     match predicate {
         Predicate::Field(name, id_predicate) if name == "id" => {
             if let Predicate::Expr(id_expr) = &**id_predicate {
@@ -222,13 +220,11 @@ fn find_predicate_required_id(predicate: &Predicate)
         Predicate::And(predicates) => {
             // Search the sub-predicates of this conjunction for one that
             // requires a specific id.
-            if let Some((i, id, child_remainder)) = predicates.iter()
-                .enumerate()
-                .find_map(|(i, p)| {
+            if let Some((i, id, child_remainder)) =
+                predicates.iter().enumerate().find_map(|(i, p)| {
                     find_predicate_required_id(p)
                         .map(|(id, child_remainder)| (i, id, child_remainder))
-                })
-            {
+                }) {
                 // predicates[i] requires a specific id. We've hoisted out the
                 // id expression, so replace predicates[i] with child_remainder.
                 return Some((id, splice(predicates, i, child_remainder)));
@@ -238,7 +234,7 @@ fn find_predicate_required_id(predicate: &Predicate)
         // We could also look into conjunctions, to see if any sub-predicate
         // requires a specific id. The nice code for this uses find_map, which
         // isn't stable yet.
-        _ => ()
+        _ => (),
     }
 
     None
@@ -263,8 +259,9 @@ fn splice<T: Clone>(slice: &[T], i: usize, v: Vec<T>) -> Vec<T> {
 struct Const<T: fmt::Debug>(T);
 
 impl<T: fmt::Debug> Plan for Const<T>
-    where T: Clone,
-          for<'a> Value<'a>: From<T>
+where
+    T: Clone,
+    for<'a> Value<'a>: From<T>,
 {
     fn run<'a>(&'a self, _dye: &'a DynEnv<'a>) -> EvalResult<'a> {
         Ok(Value::from(self.0.clone()))
@@ -276,7 +273,7 @@ struct StreamLiteral(Vec<Box<Plan>>);
 
 impl Plan for StreamLiteral {
     fn run<'a>(&'a self, dye: &'a DynEnv<'a>) -> EvalResult<'a> {
-        let iter = fallible_iterator::convert(self.0.iter().map(move |p| { p.run(dye) }));
+        let iter = fallible_iterator::convert(self.0.iter().map(move |p| p.run(dye)));
         Ok(Value::from(Stream::new(iter)))
     }
 }
@@ -363,10 +360,12 @@ impl Plan for Paths {
                     traversal.add_start_node(node.id);
                 }
             }
-            other => return Err(value::Error::Type {
-                expected: "node or stream of nodes",
-                actual: other.type_name(),
-            })
+            other => {
+                return Err(value::Error::Type {
+                    expected: "node or stream of nodes",
+                    actual: other.type_name(),
+                })
+            }
         };
 
         // The traversal produces a stream of paths, where each path is
@@ -379,21 +378,19 @@ impl Plan for Paths {
                     // "Don't be too proud of this technological terror you've constructed."
                     let start = dye.dump.get_node(path[0].origin).unwrap();
                     let iter = once(Value::from(start))
-                        .chain(path.into_iter()
-                               .flat_map(move |Step { edge, .. }| {
-                                   // If this edge is participating in a path, it
-                                   // must have a referent...
-                                   let referent = dye.dump.get_node(edge.referent.unwrap()).unwrap();
-                                   once(Value::from(edge))
-                                       .chain(once(Value::from(referent)))
-                               }))
-                        .map(Ok);
+                        .chain(path.into_iter().flat_map(move |Step { edge, .. }| {
+                            // If this edge is participating in a path, it
+                            // must have a referent...
+                            let referent = dye.dump.get_node(edge.referent.unwrap()).unwrap();
+                            once(Value::from(edge)).chain(once(Value::from(referent)))
+                        })).map(Ok);
                     Some(Stream::new(fallible_iterator::convert(iter)))
                 }
-            })
-            .map(Value::from)
+            }).map(Value::from)
             .map(Ok);
-        Ok(Value::from(Stream::new(fallible_iterator::convert(paths_iter))))
+        Ok(Value::from(Stream::new(fallible_iterator::convert(
+            paths_iter,
+        ))))
     }
 }
 
@@ -419,18 +416,17 @@ impl PredicatePlan for FieldPredicate {
             _ => {
                 return Err(value::Error::Type {
                     expected: "node or edge",
-                    actual: value.type_name()
+                    actual: value.type_name(),
                 });
             }
         };
-        field.map_or(Ok(false),
-                     |field_value| self.predicate.test(dye, &field_value))
+        field.map_or(Ok(false), |field_value| {
+            self.predicate.test(dye, &field_value)
+        })
     }
 }
 
-fn get_node_field<'v>(node: &'v Node, field: &str)
-                      -> Result<Option<Value<'v>>, value::Error>
-{
+fn get_node_field<'v>(node: &'v Node, field: &str) -> Result<Option<Value<'v>>, value::Error> {
     Ok(match field {
         "id" => Some(node.id.0.into()),
         "size" => node.size.map(Value::from),
@@ -439,23 +435,25 @@ fn get_node_field<'v>(node: &'v Node, field: &str)
         "JSObjectClassName" => node.JSObjectClassName.map(|t| t.to_string().into()),
         "scriptFilename" => node.scriptFilename.map(|t| t.to_string().into()),
         "descriptiveTypeName" => node.descriptiveTypeName.map(|t| t.to_string().into()),
-        _ => return Err(value::Error::NoSuchField {
-            value_type: "nodes",
-            field: field.into()
-        }),
+        _ => {
+            return Err(value::Error::NoSuchField {
+                value_type: "nodes",
+                field: field.into(),
+            })
+        }
     })
 }
 
-fn get_edge_field<'v>(edge: &'v Edge, field: &str)
-                      -> Result<Option<Value<'v>>, value::Error>
-{
+fn get_edge_field<'v>(edge: &'v Edge, field: &str) -> Result<Option<Value<'v>>, value::Error> {
     Ok(match field {
         "referent" => edge.referent.map(|id| Value::from(id.0)),
         "name" => edge.name.map(|n| n.to_string().into()),
-        _ => return Err(value::Error::NoSuchField {
-            value_type: "edges",
-            field: field.into()
-        }),
+        _ => {
+            return Err(value::Error::NoSuchField {
+                value_type: "edges",
+                field: field.into(),
+            })
+        }
     })
 }
 
@@ -482,8 +480,7 @@ impl PredicatePlan for Regex {
 struct And(Vec<Box<PredicatePlan>>);
 impl PredicatePlan for And {
     fn test<'a>(&'a self, dye: &'a DynEnv<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
-        fallible_iterator::convert(self.0.iter().map(Ok))
-            .all(|plan| plan.test(dye, value))
+        fallible_iterator::convert(self.0.iter().map(Ok)).all(|plan| plan.test(dye, value))
     }
 }
 
@@ -491,8 +488,7 @@ impl PredicatePlan for And {
 struct Or(Vec<Box<PredicatePlan>>);
 impl PredicatePlan for Or {
     fn test<'a>(&'a self, dye: &'a DynEnv<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
-        fallible_iterator::convert(self.0.iter().map(Ok))
-            .any(|plan| plan.test(dye, value))
+        fallible_iterator::convert(self.0.iter().map(Ok)).any(|plan| plan.test(dye, value))
     }
 }
 
@@ -580,7 +576,11 @@ struct Empty;
 impl PredicatePlan for Empty {
     fn test<'a>(&'a self, _dye: &'a DynEnv<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
         let stream: &Stream = value.try_unwrap_ref()?;
-        Ok(if let None = stream.clone().next()? { false } else { true })
+        Ok(if let None = stream.clone().next()? {
+            false
+        } else {
+            true
+        })
     }
 }
 
@@ -589,6 +589,10 @@ struct NonEmpty;
 impl PredicatePlan for NonEmpty {
     fn test<'a>(&'a self, _dye: &'a DynEnv<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
         let stream: &Stream = value.try_unwrap_ref()?;
-        Ok(if let None = stream.clone().next()? { true } else { false })
+        Ok(if let None = stream.clone().next()? {
+            true
+        } else {
+            false
+        })
     }
 }

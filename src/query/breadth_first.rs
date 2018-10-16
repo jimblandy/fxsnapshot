@@ -2,8 +2,8 @@
 
 use dump::{CoreDump, Edge, NodeId};
 
-use std::collections::{HashMap, VecDeque};
 use std::collections::hash_map::Entry;
+use std::collections::{HashMap, VecDeque};
 
 #[derive(Clone, Debug)]
 pub struct BreadthFirst<'a> {
@@ -26,7 +26,7 @@ pub struct BreadthFirst<'a> {
 #[derive(Clone, Debug)]
 pub struct Step<'a> {
     pub origin: NodeId,
-    pub edge: &'a Edge<'a>
+    pub edge: &'a Edge<'a>,
 }
 
 impl<'a> BreadthFirst<'a> {
@@ -34,7 +34,7 @@ impl<'a> BreadthFirst<'a> {
         BreadthFirst {
             dump,
             visited: HashMap::new(),
-            front: VecDeque::new()
+            front: VecDeque::new(),
         }
     }
 
@@ -53,7 +53,7 @@ impl<'a> BreadthFirst<'a> {
     /// `id`. If `id` is itself a start node, return an empty vector.
     pub fn path_from_start(&self, id: NodeId) -> Option<Vec<Step<'a>>> {
         let mut entry = match self.visited.get(&id) {
-            Some(e) => e, // We have visited this node, or it is a start node.
+            Some(e) => e,        // We have visited this node, or it is a start node.
             None => return None, // We have never encountered this node.
         };
 

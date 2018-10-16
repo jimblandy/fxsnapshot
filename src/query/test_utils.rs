@@ -40,18 +40,19 @@ pub fn app(arg: Box<Expr>, fun: Box<Expr>) -> Box<Expr> {
 }
 
 pub fn lambda<'a, F: 'a>(id: usize, formals: F, body: Box<Expr>) -> Box<Expr>
-    where F: IntoIterator<Item=&'a &'static str>
+where
+    F: IntoIterator<Item = &'a &'static str>,
 {
     Box::new(Expr::Lambda {
         id: LambdaId(id),
         formals: formals.into_iter().map(|&f| f.to_owned()).collect(),
-        body
+        body,
     })
 }
 
 pub fn var(id: usize, name: &str) -> Box<Expr> {
     Box::new(Expr::Var(Var::Lexical {
         id: UseId(id),
-        name: name.to_owned()
+        name: name.to_owned(),
     }))
 }

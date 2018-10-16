@@ -13,8 +13,15 @@ pub enum Expr {
     Predicate(Box<Expr>, PredicateOp, Box<Predicate>),
 
     Var(Var),
-    App { arg: Box<Expr>, fun: Box<Expr> },
-    Lambda { id: LambdaId, formals: Vec<String>, body: Box<Expr> },
+    App {
+        arg: Box<Expr>,
+        fun: Box<Expr>,
+    },
+    Lambda {
+        id: LambdaId,
+        formals: Vec<String>,
+        body: Box<Expr>,
+    },
 }
 
 #[derive(Clone, Copy, Eq, PartialEq, Hash)]
@@ -95,9 +102,7 @@ impl PartialEq for Predicate {
             (Predicate::Ends(lhs), Predicate::Ends(rhs)) => lhs == rhs,
             (Predicate::Any(lhs), Predicate::Any(rhs)) => lhs == rhs,
             (Predicate::All(lhs), Predicate::All(rhs)) => lhs == rhs,
-            (Predicate::Regex(lhs), Predicate::Regex(rhs)) => {
-                lhs.as_str() == rhs.as_str()
-            }
+            (Predicate::Regex(lhs), Predicate::Regex(rhs)) => lhs.as_str() == rhs.as_str(),
             (Predicate::And(lhs), Predicate::And(rhs)) => lhs == rhs,
             (Predicate::Or(lhs), Predicate::Or(rhs)) => lhs == rhs,
             (Predicate::Not(lhs), Predicate::Not(rhs)) => lhs == rhs,
@@ -106,7 +111,7 @@ impl PartialEq for Predicate {
     }
 }
 
-impl Eq for Predicate { }
+impl Eq for Predicate {}
 
 pub type Builder = Box<FnBox(Box<Expr>) -> Box<Expr>>;
 
@@ -119,7 +124,7 @@ pub fn denoted_string(literal: &str) -> String {
         match ch {
             // String literals never end with a backslash.
             '\\' => result.push(iter.next().unwrap()),
-            ch => result.push(ch)
+            ch => result.push(ch),
         }
     }
     result
@@ -132,7 +137,7 @@ pub fn denoted_regex(literal: &str) -> String {
         match ch {
             // Regex literals never end with a backslash.
             '\\' => result.push(iter.next().unwrap()),
-            ch => result.push(ch)
+            ch => result.push(ch),
         }
     }
     result

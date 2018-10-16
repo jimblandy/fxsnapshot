@@ -1,11 +1,11 @@
 extern crate lalrpop;
 extern crate pb_rs;
 
+use pb_rs::types::{Config, FileDescriptor};
 use std::env;
 use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use pb_rs::types::{Config, FileDescriptor};
 
 fn main() {
     let out_dir = env::var("OUT_DIR").unwrap();

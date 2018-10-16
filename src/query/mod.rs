@@ -47,8 +47,8 @@ mod run;
 mod value;
 mod walkers;
 
-mod test_utils;
 mod test;
+mod test_utils;
 
 mod grammar {
     include!(concat!(env!("OUT_DIR"), "/query/query.rs"));
@@ -57,8 +57,8 @@ mod grammar {
 pub use self::grammar::Token;
 pub use self::value::{EvalResult, Value};
 
-use dump::CoreDump;
 use self::run::label_exprs;
+use dump::CoreDump;
 
 pub type ParseError<'input> = lalrpop_util::ParseError<usize, Token<'input>, &'static str>;
 
@@ -102,5 +102,5 @@ pub trait PredicatePlan: fmt::Debug {
 }
 
 pub struct DynEnv<'a> {
-    pub dump: &'a CoreDump<'a>
+    pub dump: &'a CoreDump<'a>,
 }

@@ -19,7 +19,7 @@ pub enum Value<'a> {
     String(String),
     Edge(&'a Edge<'a>),
     Node(&'a Node<'a>),
-    Stream(Stream<'a>)
+    Stream(Stream<'a>),
 }
 
 /// The result of evaluating an expression: either a value, or a
@@ -38,7 +38,10 @@ pub trait CloneableStream<'a> {
 pub enum Error {
     /// Type mismatch.
     #[fail(display = "expected type {}, got {}", expected, actual)]
-    Type { actual: &'static str, expected: &'static str },
+    Type {
+        actual: &'static str,
+        expected: &'static str,
+    },
 
     /// Trying to draw a value (`first`, etc.) from an empty stream.
     #[fail(display = "stream produced no values")]
@@ -46,7 +49,10 @@ pub enum Error {
 
     /// Matching on a non-existent Node or Edge field.
     #[fail(display = "{} have no field named {}", value_type, field)]
-    NoSuchField { value_type: &'static str, field: String }
+    NoSuchField {
+        value_type: &'static str,
+        field: String,
+    },
 }
 
 /// `Value` implements `TryUnwrap<T>` for each type `T` it can be unwrapped
@@ -71,20 +77,20 @@ enum Orientation {
 
     /// A sequence laid out as a series of lines. The `usize` indicates the
     /// depth of indentation applied to each element.
-    Vertical(usize)
+    Vertical(usize),
 }
 
 impl<'a> Value<'a> {
-    pub fn top_write(&self, stream: &mut io::Write)
-                     -> Result<(), failure::Error>
-    {
+    pub fn top_write(&self, stream: &mut io::Write) -> Result<(), failure::Error> {
         self.write(&Orientation::Vertical(0), stream)
     }
 
     /// Write `self` to `stream`. If it is a stream, lay it out using `orientation`.
-    fn write(&self, orientation: &Orientation, stream: &mut io::Write)
-             -> Result<(), failure::Error>
-    {
+    fn write(
+        &self,
+        orientation: &Orientation,
+        stream: &mut io::Write,
+    ) -> Result<(), failure::Error> {
         match self {
             Value::Number(n) => Ok(write!(stream, "{}", n)?),
             Value::String(s) => Ok(write!(stream, "{}", s)?),
@@ -105,9 +111,11 @@ impl<'a> Value<'a> {
     }
 }
 
-fn write_stream<'a>(mut stream: Stream<'a>, orientation: &Orientation, output: &mut io::Write)
-                    -> Result<(), failure::Error>
-{
+fn write_stream<'a>(
+    mut stream: Stream<'a>,
+    orientation: &Orientation,
+    output: &mut io::Write,
+) -> Result<(), failure::Error> {
     match orientation {
         Orientation::Horizontal(indent) => {
             // Any streams nested within this one should be laid out vertically,
@@ -178,7 +186,7 @@ macro_rules! impl_value_variant {
                 } else {
                     Err(Error::Type {
                         expected: <$type>::NAME,
-                        actual: self.type_name()
+                        actual: self.type_name(),
                     })
                 }
             }
@@ -189,12 +197,12 @@ macro_rules! impl_value_variant {
                 } else {
                     Err(Error::Type {
                         expected: <$type>::NAME,
-                        actual: self.type_name()
+                        actual: self.type_name(),
                     })
                 }
             }
         }
-    }
+    };
 }
 
 impl_value_variant!(u64, Number, "number");
@@ -204,7 +212,8 @@ impl_value_variant!(&'a Node<'a>, Node, "node");
 impl_value_variant!(Stream<'a>, Stream, "stream");
 
 impl<'a, I> CloneableStream<'a> for I
-    where I: 'a + FallibleIterator<Item=Value<'a>, Error=Error> + Clone
+where
+    I: 'a + FallibleIterator<Item = Value<'a>, Error = Error> + Clone,
 {
     fn boxed_clone(&self) -> Box<'a + CloneableStream<'a>> {
         Box::new(self.clone())
@@ -217,7 +226,8 @@ impl<'a, I> CloneableStream<'a> for I
 
 impl<'a> Stream<'a> {
     pub fn new<I>(iter: I) -> Stream<'a>
-        where I: 'a + CloneableStream<'a>
+    where
+        I: 'a + CloneableStream<'a>,
     {
         Stream(Box::new(iter))
     }

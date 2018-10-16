@@ -1,13 +1,15 @@
 #![feature(fnbox)] // for std::boxed::FnBox; see #28796
 
 // extern crates
-#[macro_use] extern crate failure;
-#[macro_use] extern crate failure_derive;
-             extern crate fallible_iterator;
-             extern crate lalrpop_util;
-             extern crate memmap;
-             extern crate quick_protobuf;
-             extern crate regex;
+#[macro_use]
+extern crate failure;
+#[macro_use]
+extern crate failure_derive;
+extern crate fallible_iterator;
+extern crate lalrpop_util;
+extern crate memmap;
+extern crate quick_protobuf;
+extern crate regex;
 
 // extern crate uses
 use failure::{Error, ResultExt};
@@ -32,12 +34,11 @@ fn run() -> Result<(), Error> {
     }
 
     let query_text = args[1].to_string_lossy().into_owned();
-    let query = query::compile(&query_text)
-        .map_err(|e| format_err!("{}", e))?;
+    let query = query::compile(&query_text).map_err(|e| format_err!("{}", e))?;
 
     let path = Path::new(&args[0]);
-    let file = File::open(path)
-        .context(format!("Failed to open snapshot '{}':", path.display()))?;
+    let file =
+        File::open(path).context(format!("Failed to open snapshot '{}':", path.display()))?;
     let mmap = unsafe { Mmap::map(&file)? };
     let bytes = &mmap[..];
 
