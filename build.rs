@@ -32,7 +32,7 @@ fn main() {
 
     lalrpop::Configuration::new()
         .use_cargo_dir_conventions()
-        .process_file("src/query/grammar.lalrpop")
+        .process_file("src/query/query.lalrpop")
         .expect("failed to generate parser");
-    println!("cargo:rerun-if-changed=src/query/grammar.lalrpop");
+    println!("cargo:rerun-if-changed=src/query/query.lalrpop");
 }

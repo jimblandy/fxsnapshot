@@ -6,7 +6,6 @@ Git is the backtrace; this is the continuation.
 %%%% = big
 
 * internal cleanups
-- [ ] % "grammar.lalrpop" is a redundant name
 - [ ] % pre-box Predicates, simplify actions in Predicate
 - [ ] % impl Debug for Plan
 - [ ] %% Use From<&[u8]> instead of FromDumpBytes?

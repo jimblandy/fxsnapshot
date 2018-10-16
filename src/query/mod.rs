@@ -51,7 +51,7 @@ mod test_utils;
 mod test;
 
 mod grammar {
-    include!(concat!(env!("OUT_DIR"), "/query/grammar.rs"));
+    include!(concat!(env!("OUT_DIR"), "/query/query.rs"));
 }
 
 pub use self::grammar::Token;
