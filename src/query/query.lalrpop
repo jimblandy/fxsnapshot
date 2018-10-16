@@ -45,10 +45,10 @@ Suffix: Builder = {
     <PrimaryExpr<"">> => Box::new(move |lhs| Box::new(Expr::App { arg: lhs, fun: <> })),
 
     <op: PredicateOp> <predicate: Predicate> =>
-        Box::new(move |lhs| Box::new(Expr::Predicate(lhs, op, predicate))),
+        Box::new(move |lhs| Box::new(Expr::Predicate(lhs, op, Box::new(predicate)))),
     "{" <predicates: Comma<Predicate>> "}" =>
         Box::new(move |lhs| Box::new(Expr::Predicate(lhs, PredicateOp::Filter,
-                                                     Predicate::And(predicates)))),
+                                                     Box::new(Predicate::And(predicates))))),
 }
 
 PrimaryExpr<P>: Box<Expr> = {
@@ -111,10 +111,18 @@ Predicate: Predicate = {
 };
 
 PrimaryPredicate: Predicate = {
-    <PrimaryExpr<"No Parens">> => Predicate::Expr(<>),
+    <PrimaryExpr<"No Parens">> => Predicate::Expr(*<>),
     <id: Id> ":" <p: PrimaryPredicate> => Predicate::Field(id, Box::new(p)),
-    <r: r"/([^\\/]|\\.)*/"> => Predicate::Regex(regex::Regex::new(&denoted_regex(&r[1..r.len()-1])).unwrap()),
-    <r: r"#/([^/]|/[^#])*/#"> => Predicate::Regex(regex::Regex::new(&r[2..r.len()-2]).unwrap()),
+    <r: r"/([^\\/]|\\.)*/"> => {
+        let denoted = &denoted_regex(&r[1..r.len()-1]);
+        let regex = regex::Regex::new(denoted).unwrap();
+        Predicate::Regex(Box::new(regex))
+    },
+    <r: r"#/([^/]|/[^#])*/#"> => {
+        let denoted = &r[2..r.len()-2];
+        let regex = regex::Regex::new(denoted).unwrap();
+        Predicate::Regex(Box::new(regex))
+    },
     "ends" <p: PrimaryPredicate> => Predicate::Ends(Box::new(p)),
     "any" <p: PrimaryPredicate> => Predicate::Any(Box::new(p)),
     "all" <p: PrimaryPredicate> => Predicate::All(Box::new(p)),

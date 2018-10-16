@@ -10,7 +10,7 @@ pub enum Expr {
     String(String),
     StreamLiteral(Vec<Box<Expr>>),
 
-    Predicate(Box<Expr>, PredicateOp, Predicate),
+    Predicate(Box<Expr>, PredicateOp, Box<Predicate>),
 
     Var(Var),
     App { arg: Box<Expr>, fun: Box<Expr> },
@@ -74,12 +74,12 @@ pub enum PredicateOp {
 
 #[derive(Clone, Debug)]
 pub enum Predicate {
-    Expr(Box<Expr>),
+    Expr(Expr),
     Field(String, Box<Predicate>),
     Ends(Box<Predicate>),
     Any(Box<Predicate>),
     All(Box<Predicate>),
-    Regex(regex::Regex),
+    Regex(Box<regex::Regex>),
     And(Vec<Predicate>),
     Or(Vec<Predicate>),
     Not(Box<Predicate>),

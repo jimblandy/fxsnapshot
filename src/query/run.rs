@@ -188,7 +188,7 @@ fn plan_predicate(predicate: &Predicate) -> PlanOrTrivial {
             PlanOrTrivial::Trivial(true) => Trivial(true),
             PlanOrTrivial::Trivial(false) => Plan(Box::new(Empty)),
         }
-        Predicate::Regex(regex) => Plan(Box::new(Regex(regex.clone()))),
+        Predicate::Regex(regex) => Plan(Box::new(Regex((&**regex).clone()))),
         Predicate::And(predicates) => plan_junction::<And>(predicates),
         Predicate::Or(predicates) => plan_junction::<Or>(predicates),
         Predicate::Not(predicate) => match plan_predicate(predicate) {

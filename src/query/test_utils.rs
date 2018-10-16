@@ -12,7 +12,7 @@ pub fn nodes() -> Box<Expr> {
 }
 
 pub fn pred_op(stream: Box<Expr>, op: PredicateOp, pred: Box<Predicate>) -> Box<Expr> {
-    Box::new(Expr::Predicate(stream, op, *pred))
+    Box::new(Expr::Predicate(stream, op, pred))
 }
 
 pub fn filter(stream: Box<Expr>, pred: Box<Predicate>) -> Box<Expr> {
@@ -28,7 +28,7 @@ pub fn number(n: u64) -> Box<Expr> {
 }
 
 pub fn expr_pred(expr: Box<Expr>) -> Box<Predicate> {
-    Box::new(Predicate::Expr(expr))
+    Box::new(Predicate::Expr(*expr))
 }
 
 pub fn and1(pred: Box<Predicate>) -> Box<Predicate> {
