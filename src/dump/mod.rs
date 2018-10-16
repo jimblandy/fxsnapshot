@@ -201,7 +201,7 @@ impl<'a> fmt::Debug for CoreDump<'a> {
 
 /// A type that can intern strings of type C. In practice, `Self` is always
 /// `CoreDump`, and `C` is `OneByteString` or `TwoByteString`.
-trait StringTable<'buffer, C: 'buffer + Copy + FromDumpBytes<'buffer>> {
+trait StringTable<'buffer, C: 'buffer + Copy + From<&'buffer [u8]>> {
     /// Record that `string` is `self`'s next string of type `C`.
     fn intern_string(&mut self, string: C);
 
@@ -248,19 +248,14 @@ macro_rules! impl_StringTable {
 impl_StringTable!(one_byte_strings, OneByteString);
 impl_StringTable!(two_byte_strings, TwoByteString);
 
-/// A type that can be constructed from a block of bytes in a core dump.
-trait FromDumpBytes<'b> {
-    fn from_dump_bytes(bytes: &'b [u8]) -> Self;
-}
-
-impl<'b> FromDumpBytes<'b> for OneByteString<'b> {
-    fn from_dump_bytes(bytes: &'b [u8]) -> Self {
+impl<'b> From<&'b [u8]> for OneByteString<'b> {
+    fn from(bytes: &'b [u8]) -> Self {
         OneByteString(bytes)
     }
 }
 
-impl<'b> FromDumpBytes<'b> for TwoByteString<'b> {
-    fn from_dump_bytes(bytes: &'b [u8]) -> Self {
+impl<'b> From<&'b [u8]> for TwoByteString<'b> {
+    fn from(bytes: &'b [u8]) -> Self {
         TwoByteString(transmute_simple_slice(bytes))
     }
 }
@@ -292,7 +287,7 @@ enum Deduplicated<T> {
 ///
 /// This trait should be implemented for the `OneOfBlahOrRef` types that `pb-rs`
 /// generates for the `CoreDump.proto` `oneof` fields holding strings.
-trait DeduplicatedString<'buffer, C: 'buffer + FromDumpBytes<'buffer> + Copy> {
+trait DeduplicatedString<'buffer, C: 'buffer + From<&'buffer [u8]> + Copy> {
     /// Retrieve the string as raw bytes or a back reference index.
     fn get_bytes(&self) -> Option<Deduplicated<&'buffer [u8]>>;
 
@@ -302,7 +297,7 @@ trait DeduplicatedString<'buffer, C: 'buffer + FromDumpBytes<'buffer> + Copy> {
         use self::Deduplicated::*;
         self.get_bytes().map(|d| {
             match d {
-                Given(bytes) => Given(C::from_dump_bytes(bytes)),
+                Given(bytes) => Given(C::from(bytes)),
                 Ref(index) => Ref(index)
             }
         })

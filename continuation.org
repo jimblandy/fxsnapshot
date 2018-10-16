@@ -6,7 +6,6 @@ Git is the backtrace; this is the continuation.
 %%%% = big
 
 * internal cleanups
-- [ ] %% Use From<&[u8]> instead of FromDumpBytes?
 - [ ] %% rustfmt
 - [ ] %% install clippy
 - [ ] %% use interned atoms for identifiers, instead of strings (crate string_cache?)
