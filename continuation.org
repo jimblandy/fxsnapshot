@@ -17,6 +17,7 @@ Git is the backtrace; this is the continuation.
 - [ ] %% rearrange into parse, analyze, plan; put `Plan` and `DynEnv` in `query/mod.rs`.
 - [ ] %%% finish fallible-iterator
 - [ ] %%% can we specialize some plans to the value types they produce?
+- [ ] %%% update dependencies to avoid compiling expensive crates multiple times
 
 * language features
 - [ ] %% map - followed by Suffix!
