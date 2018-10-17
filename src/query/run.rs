@@ -372,7 +372,7 @@ impl Plan for Paths {
         // itself a stream of alternating nodes and edges.
         let paths_iter = traversal
             .filter_map(move |path| {
-                if path.len() == 0 {
+                if path.is_empty() {
                     None
                 } else {
                     // "Don't be too proud of this technological terror you've constructed."
@@ -576,11 +576,7 @@ struct Empty;
 impl PredicatePlan for Empty {
     fn test<'a>(&'a self, _dye: &'a DynEnv<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
         let stream: &Stream = value.try_unwrap_ref()?;
-        Ok(if let None = stream.clone().next()? {
-            false
-        } else {
-            true
-        })
+        Ok(stream.clone().next()?.is_none())
     }
 }
 
@@ -589,10 +585,6 @@ struct NonEmpty;
 impl PredicatePlan for NonEmpty {
     fn test<'a>(&'a self, _dye: &'a DynEnv<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
         let stream: &Stream = value.try_unwrap_ref()?;
-        Ok(if let None = stream.clone().next()? {
-            true
-        } else {
-            false
-        })
+        Ok(stream.clone().next()?.is_some())
     }
 }

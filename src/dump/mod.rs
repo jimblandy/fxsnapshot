@@ -91,7 +91,7 @@ pub enum CoarseType {
 }
 
 impl<'buffer> CoreDump<'buffer> {
-    pub fn new<'p>(path: &'p Path, bytes: &'buffer [u8]) -> Result<CoreDump<'buffer>, Error> {
+    pub fn from_bytes<'p>(path: &'p Path, bytes: &'buffer [u8]) -> Result<CoreDump<'buffer>, Error> {
         let mut reader = BytesReader::from_bytes(bytes);
         let metadata: protobuf::Metadata = reader
             .read_message(bytes)
@@ -147,7 +147,7 @@ impl<'buffer> CoreDump<'buffer> {
 
     pub fn get_root(&self) -> &Node<'buffer> {
         // root_id had better be present in the table.
-        self.nodes.get(&self.root_id).unwrap()
+        &self.nodes[&self.root_id]
     }
 
     pub fn get_node(&self, id: NodeId) -> Option<&Node<'buffer>> {

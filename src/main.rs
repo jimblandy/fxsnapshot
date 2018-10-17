@@ -42,7 +42,7 @@ fn run() -> Result<(), Error> {
     let mmap = unsafe { Mmap::map(&file)? };
     let bytes = &mmap[..];
 
-    let dump = CoreDump::new(path, bytes)?;
+    let dump = CoreDump::from_bytes(path, bytes)?;
     let dye = query::DynEnv { dump: &dump };
 
     let stdout = std::io::stdout();

@@ -6,7 +6,6 @@ Git is the backtrace; this is the continuation.
 %%%% = big
 
 * internal cleanups
-- [ ] %% install clippy
 - [ ] %% use interned atoms for identifiers, instead of strings (crate string_cache?)
 - [ ] %% Change `Stream<'a>` to `Stream<T>`, make `Stream` independent?
 - [ ] %% Change `TryUnwrap` to `FromValue`? so you'd write `Stream<'a>::from_value`?

@@ -92,12 +92,15 @@ impl<'a> Value<'a> {
         stream: &mut io::Write,
     ) -> Result<(), failure::Error> {
         match self {
-            Value::Number(n) => Ok(write!(stream, "{}", n)?),
-            Value::String(s) => Ok(write!(stream, "{}", s)?),
-            Value::Edge(e) => Ok(write!(stream, "{:?}", e)?),
-            Value::Node(n) => Ok(write!(stream, "{:?}", n)?),
-            Value::Stream(s) => write_stream(s.clone(), orientation, stream),
+            Value::Number(n) => write!(stream, "{}", n)?,
+            Value::String(s) => write!(stream, "{}", s)?,
+            Value::Edge(e) => write!(stream, "{:?}", e)?,
+            Value::Node(n) => write!(stream, "{:?}", n)?,
+            Value::Stream(s) => {
+                return write_stream(s.clone(), orientation, stream);
+            }
         }
+        Ok(())
     }
 
     pub fn type_name(&self) -> &'static str {
@@ -137,11 +140,11 @@ fn write_stream<'a>(
             // horizontally, as a line of their own.
             let nested_orientation = Orientation::Horizontal(*indent);
 
-            write!(output, "[\n")?;
+            writeln!(output, "[")?;
             while let Some(value) = stream.next()? {
                 write!(output, "{:1$}", "", indent)?;
                 value.write(&nested_orientation, output)?;
-                write!(output, "\n")?;
+                writeln!(output)?;
             }
             write!(output, "{:1$}]", "", indent)?;
         }
