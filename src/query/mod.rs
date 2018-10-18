@@ -10,7 +10,7 @@
 //!   resulting from a particular evaluation. Queries are compiled to a
 //!   `Box<Plan>`.
 //!
-//! - The [`DynEnv`][dye] struct represents the dynamic environment in which
+//! - The [`Globals`][glob] struct represents the overall environment in which
 //!   evaluation takes place. At the moment, this just carries the `CoreDump`
 //!   around, but as the language becomes more capable, perhaps there will be
 //!   more things here.
@@ -40,6 +40,7 @@
 //! [expr](ast/enum.Expr.html)
 //! [plan](run/trait.Plan.html)
 //! [value](value/enum.Value.html)
+//! [glob](struct.Globals.html)
 mod ast;
 mod breadth_first;
 mod env;
@@ -88,19 +89,20 @@ pub enum StaticError {
 /// `Plan` values, which serve as the code for a sort of indirect-threaded
 /// interpreter.
 pub trait Plan: fmt::Debug {
-    /// Evaluate code for some expression, yielding either a `T` value or an
-    /// error. Consult `DynEnv` for random contextual information like the
-    /// current `CoreDump`.
-    fn run<'a>(&'a self, dye: &'a DynEnv<'a>) -> EvalResult<'a>;
+    /// Execute the plan `self` in the given environment, producing either a
+    /// `Value` or an error.
+    fn run<'a>(&'a self, &'a Env<'a>) -> EvalResult<'a>;
 }
 
 /// A plan for evaluating a predicate on a `Value`.
 pub trait PredicatePlan: fmt::Debug {
-    /// Determine whether this predicate matches `value`. Consult `DynEnv` for
-    /// random contextual information like the current `CoreDump`.
-    fn test<'a>(&'a self, dye: &'a DynEnv<'a>, &Value<'a>) -> Result<bool, value::Error>;
+    /// Determine whether this predicate, executed in the given environment,
+    /// matches `value`.
+    fn test<'a>(&'a self, &'a Env<'a>, &Value<'a>) -> Result<bool, value::Error>;
 }
 
-pub struct DynEnv<'a> {
+/// The environment in which plans and predicates are executed.
+pub struct Env<'a> {
     pub dump: &'a CoreDump<'a>,
 }
+

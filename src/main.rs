@@ -43,7 +43,7 @@ fn run() -> Result<(), Error> {
     let bytes = &mmap[..];
 
     let dump = CoreDump::from_bytes(path, bytes)?;
-    let dye = query::DynEnv { dump: &dump };
+    let dye = query::Env { dump: &dump };
 
     let stdout = std::io::stdout();
     query.run(&dye)?.top_write(&mut stdout.lock())?;

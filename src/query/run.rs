@@ -12,7 +12,7 @@ use super::ast::{Expr, LambdaId, Predicate, PredicateOp, UseId, Var};
 use super::breadth_first::{BreadthFirst, Step};
 use super::value::{self, EvalResult, Stream, TryUnwrap, Value};
 use super::walkers::ExprWalkerMut;
-use super::{DynEnv, Plan, PredicatePlan};
+use super::{Env, Plan, PredicatePlan};
 use dump::{Edge, Node, NodeId};
 
 use std::fmt;
@@ -263,7 +263,7 @@ where
     T: Clone,
     for<'a> Value<'a>: From<T>,
 {
-    fn run<'a>(&'a self, _dye: &'a DynEnv<'a>) -> EvalResult<'a> {
+    fn run<'a>(&'a self, _env: &'a Env<'a>) -> EvalResult<'a> {
         Ok(Value::from(self.0.clone()))
     }
 }
@@ -272,8 +272,8 @@ where
 struct StreamLiteral(Vec<Box<Plan>>);
 
 impl Plan for StreamLiteral {
-    fn run<'a>(&'a self, dye: &'a DynEnv<'a>) -> EvalResult<'a> {
-        let iter = fallible_iterator::convert(self.0.iter().map(move |p| p.run(dye)));
+    fn run<'a>(&'a self, env: &'a Env<'a>) -> EvalResult<'a> {
+        let iter = fallible_iterator::convert(self.0.iter().map(move |p| p.run(env)));
         Ok(Value::from(Stream::new(iter)))
     }
 }
@@ -281,8 +281,8 @@ impl Plan for StreamLiteral {
 #[derive(Debug)]
 struct First(Box<Plan>);
 impl Plan for First {
-    fn run<'a>(&'a self, dye: &'a DynEnv<'a>) -> EvalResult<'a> {
-        let value = self.0.run(dye)?;
+    fn run<'a>(&'a self, env: &'a Env<'a>) -> EvalResult<'a> {
+        let value = self.0.run(env)?;
         let mut stream: Stream<'a> = value.try_unwrap()?;
         match stream.next()? {
             Some(v) => Ok(v),
@@ -294,16 +294,16 @@ impl Plan for First {
 #[derive(Debug)]
 struct Root;
 impl Plan for Root {
-    fn run<'a>(&'a self, dye: &'a DynEnv<'a>) -> EvalResult<'a> {
-        Ok(Value::from(dye.dump.get_root()))
+    fn run<'a>(&'a self, env: &'a Env<'a>) -> EvalResult<'a> {
+        Ok(Value::from(env.dump.get_root()))
     }
 }
 
 #[derive(Debug)]
 struct Nodes;
 impl Plan for Nodes {
-    fn run<'a>(&'a self, dye: &'a DynEnv<'a>) -> EvalResult<'a> {
-        let iter = fallible_iterator::convert(dye.dump.nodes().map(|n| Ok(n.into())));
+    fn run<'a>(&'a self, env: &'a Env<'a>) -> EvalResult<'a> {
+        let iter = fallible_iterator::convert(env.dump.nodes().map(|n| Ok(n.into())));
         Ok(Value::from(Stream::new(iter)))
     }
 }
@@ -311,10 +311,10 @@ impl Plan for Nodes {
 #[derive(Debug)]
 struct NodesById(Box<Plan>);
 impl Plan for NodesById {
-    fn run<'a>(&'a self, dye: &'a DynEnv<'a>) -> EvalResult<'a> {
-        let value = self.0.run(dye)?;
+    fn run<'a>(&'a self, env: &'a Env<'a>) -> EvalResult<'a> {
+        let value = self.0.run(env)?;
         let id = NodeId(value.try_unwrap()?);
-        let optional_node = dye.dump.get_node(id).map(|on| Ok(Value::from(on)));
+        let optional_node = env.dump.get_node(id).map(|on| Ok(Value::from(on)));
         let iter = fallible_iterator::convert(optional_node.into_iter());
         Ok(Value::from(Stream::new(iter)))
     }
@@ -323,8 +323,8 @@ impl Plan for NodesById {
 #[derive(Debug)]
 struct Edges(Box<Plan>);
 impl Plan for Edges {
-    fn run<'a>(&'a self, dye: &'a DynEnv<'a>) -> EvalResult<'a> {
-        let value = self.0.run(dye)?;
+    fn run<'a>(&'a self, env: &'a Env<'a>) -> EvalResult<'a> {
+        let value = self.0.run(env)?;
         let node: &Node = value.try_unwrap()?;
         let iter = node.edges.iter().map(|e| Ok(Value::from(e)));
         let iter = fallible_iterator::convert(iter);
@@ -338,10 +338,10 @@ struct Filter {
     filter: Box<PredicatePlan>,
 }
 impl Plan for Filter {
-    fn run<'a>(&'a self, dye: &'a DynEnv<'a>) -> EvalResult<'a> {
-        let value = self.stream.run(dye)?;
+    fn run<'a>(&'a self, env: &'a Env<'a>) -> EvalResult<'a> {
+        let value = self.stream.run(env)?;
         let stream: Stream = value.try_unwrap()?;
-        let iter = stream.filter(move |item| self.filter.test(&dye, item));
+        let iter = stream.filter(move |item| self.filter.test(env, item));
         Ok(Value::from(Stream::new(iter)))
     }
 }
@@ -349,9 +349,9 @@ impl Plan for Filter {
 #[derive(Debug)]
 struct Paths(Box<Plan>);
 impl Plan for Paths {
-    fn run<'a>(&'a self, dye: &'a DynEnv<'a>) -> EvalResult<'a> {
-        let value = self.0.run(dye)?;
-        let mut traversal = BreadthFirst::new(dye.dump);
+    fn run<'a>(&'a self, env: &'a Env<'a>) -> EvalResult<'a> {
+        let value = self.0.run(env)?;
+        let mut traversal = BreadthFirst::new(env.dump);
         match value {
             Value::Node(node) => traversal.add_start_node(node.id),
             Value::Stream(mut stream) => {
@@ -376,12 +376,12 @@ impl Plan for Paths {
                     None
                 } else {
                     // "Don't be too proud of this technological terror you've constructed."
-                    let start = dye.dump.get_node(path[0].origin).unwrap();
+                    let start = env.dump.get_node(path[0].origin).unwrap();
                     let iter = once(Value::from(start))
                         .chain(path.into_iter().flat_map(move |Step { edge, .. }| {
                             // If this edge is participating in a path, it
                             // must have a referent...
-                            let referent = dye.dump.get_node(edge.referent.unwrap()).unwrap();
+                            let referent = env.dump.get_node(edge.referent.unwrap()).unwrap();
                             once(Value::from(edge)).chain(once(Value::from(referent)))
                         })).map(Ok);
                     Some(Stream::new(fallible_iterator::convert(iter)))
@@ -397,8 +397,8 @@ impl Plan for Paths {
 #[derive(Debug)]
 struct EqualPredicate(Box<Plan>);
 impl PredicatePlan for EqualPredicate {
-    fn test<'a>(&'a self, dye: &'a DynEnv<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
-        let given = self.0.run(dye)?;
+    fn test<'a>(&'a self, env: &'a Env<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
+        let given = self.0.run(env)?;
         Ok(*value == given)
     }
 }
@@ -409,7 +409,7 @@ struct FieldPredicate {
     predicate: Box<PredicatePlan>,
 }
 impl PredicatePlan for FieldPredicate {
-    fn test<'a>(&'a self, dye: &'a DynEnv<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
+    fn test<'a>(&'a self, env: &'a Env<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
         let field = match value {
             Value::Node(node) => get_node_field(node, &self.field_name)?,
             Value::Edge(edge) => get_edge_field(edge, &self.field_name)?,
@@ -421,7 +421,7 @@ impl PredicatePlan for FieldPredicate {
             }
         };
         field.map_or(Ok(false), |field_value| {
-            self.predicate.test(dye, &field_value)
+            self.predicate.test(env, &field_value)
         })
     }
 }
@@ -460,17 +460,17 @@ fn get_edge_field<'v>(edge: &'v Edge, field: &str) -> Result<Option<Value<'v>>, 
 #[derive(Debug)]
 struct Ends(Box<PredicatePlan>);
 impl PredicatePlan for Ends {
-    fn test<'a>(&'a self, dye: &'a DynEnv<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
+    fn test<'a>(&'a self, env: &'a Env<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
         let stream: &Stream<'a> = value.try_unwrap_ref()?;
         let last = stream.clone().last()?.ok_or(value::Error::EmptyStream)?;
-        self.0.test(dye, &last)
+        self.0.test(env, &last)
     }
 }
 
 #[derive(Debug)]
 struct Regex(regex::Regex);
 impl PredicatePlan for Regex {
-    fn test<'a>(&'a self, _dye: &'a DynEnv<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
+    fn test<'a>(&'a self, _env: &'a Env<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
         let string: &String = value.try_unwrap_ref()?;
         Ok(self.0.is_match(&string))
     }
@@ -479,24 +479,24 @@ impl PredicatePlan for Regex {
 #[derive(Debug)]
 struct And(Vec<Box<PredicatePlan>>);
 impl PredicatePlan for And {
-    fn test<'a>(&'a self, dye: &'a DynEnv<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
-        fallible_iterator::convert(self.0.iter().map(Ok)).all(|plan| plan.test(dye, value))
+    fn test<'a>(&'a self, env: &'a Env<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
+        fallible_iterator::convert(self.0.iter().map(Ok)).all(|plan| plan.test(env, value))
     }
 }
 
 #[derive(Debug)]
 struct Or(Vec<Box<PredicatePlan>>);
 impl PredicatePlan for Or {
-    fn test<'a>(&'a self, dye: &'a DynEnv<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
-        fallible_iterator::convert(self.0.iter().map(Ok)).any(|plan| plan.test(dye, value))
+    fn test<'a>(&'a self, env: &'a Env<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
+        fallible_iterator::convert(self.0.iter().map(Ok)).any(|plan| plan.test(env, value))
     }
 }
 
 #[derive(Debug)]
 struct Not(Box<PredicatePlan>);
 impl PredicatePlan for Not {
-    fn test<'a>(&'a self, dye: &'a DynEnv<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
-        Ok(!self.0.test(dye, value)?)
+    fn test<'a>(&'a self, env: &'a Env<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
+        Ok(!self.0.test(env, value)?)
     }
 }
 
@@ -556,25 +556,25 @@ fn plan_junction<J: BlahJunction>(subterms: &[Predicate]) -> PlanOrTrivial {
 #[derive(Debug)]
 struct Any(Box<PredicatePlan>);
 impl PredicatePlan for Any {
-    fn test<'a>(&'a self, dye: &'a DynEnv<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
+    fn test<'a>(&'a self, env: &'a Env<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
         let stream: &Stream = value.try_unwrap_ref()?;
-        Ok(stream.clone().any(|element| self.0.test(dye, &element))?)
+        Ok(stream.clone().any(|element| self.0.test(env, &element))?)
     }
 }
 
 #[derive(Debug)]
 struct All(Box<PredicatePlan>);
 impl PredicatePlan for All {
-    fn test<'a>(&'a self, dye: &'a DynEnv<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
+    fn test<'a>(&'a self, env: &'a Env<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
         let stream: &Stream = value.try_unwrap_ref()?;
-        Ok(stream.clone().all(|element| self.0.test(dye, &element))?)
+        Ok(stream.clone().all(|element| self.0.test(env, &element))?)
     }
 }
 
 #[derive(Debug)]
 struct Empty;
 impl PredicatePlan for Empty {
-    fn test<'a>(&'a self, _dye: &'a DynEnv<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
+    fn test<'a>(&'a self, _env: &'a Env<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
         let stream: &Stream = value.try_unwrap_ref()?;
         Ok(stream.clone().next()?.is_none())
     }
@@ -583,7 +583,7 @@ impl PredicatePlan for Empty {
 #[derive(Debug)]
 struct NonEmpty;
 impl PredicatePlan for NonEmpty {
-    fn test<'a>(&'a self, _dye: &'a DynEnv<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
+    fn test<'a>(&'a self, _env: &'a Env<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
         let stream: &Stream = value.try_unwrap_ref()?;
         Ok(stream.clone().next()?.is_some())
     }
