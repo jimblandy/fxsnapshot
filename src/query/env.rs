@@ -28,8 +28,7 @@ struct CaptureMap<'expr> {
     /// the traversal. Outer lambdas appear before inner lambdas.
     scopes: Vec<(LambdaId, &'expr Vec<String>)>,
 
-    /// A map from each lambda to the set of variables that occur free in its
-    /// body.
+    /// A map from each lambda to the set of variables it captures.
     lambdas: HashMap<LambdaId, HashSet<VarAddr>>,
 
     /// A map from each variable use to the variable it refers to.
@@ -37,7 +36,7 @@ struct CaptureMap<'expr> {
 
     /// The set of variables we've seen used so far within the innermost lambda
     /// at this point in the traversal.
-    free: HashSet<VarAddr>,
+    captured: HashSet<VarAddr>,
 }
 
 impl<'e> CaptureMap<'e> {
@@ -68,7 +67,7 @@ impl<'expr> ExprWalker<'expr> for CaptureMap<'expr> {
             &Expr::Var(Var::Lexical { id, ref name }) => {
                 if let Some(addr) = self.find_var(name) {
                     self.uses.insert(id, addr);
-                    self.free.insert(addr);
+                    self.captured.insert(addr);
                 } else {
                     return Err(StaticError::UnboundVar {
                         name: name.to_owned(),
@@ -79,12 +78,12 @@ impl<'expr> ExprWalker<'expr> for CaptureMap<'expr> {
             &Expr::Lambda {
                 id, ref formals, ..
             } => {
-                // When we recurse, we want to find the set of free
+                // When we recurse, we want to find the set of captured
                 // variables for this lambda alone. Create a fresh `HashSet`,
-                // and drop it in as our `free` while we walk this lambda's
+                // and drop it in as our `captured` while we walk this lambda's
                 // body. We'll union its contents into our enclosing lambda's
-                // free set when we're done.
-                let parent_free = replace(&mut self.free, HashSet::new());
+                // captured set when we're done.
+                let parent_captured = replace(&mut self.captured, HashSet::new());
 
                 // Add this lambda's formals to the current list of scopes,
                 // so references in the lambda's body can see them.
@@ -97,17 +96,17 @@ impl<'expr> ExprWalker<'expr> for CaptureMap<'expr> {
                 self.scopes.pop();
 
                 // References to this lambda's formals within its body are not
-                // 'free', so drop them.
-                self.free.retain(|addr| addr.lambda != id);
+                // 'captured', so drop them.
+                self.captured.retain(|addr| addr.lambda != id);
 
-                // Take out our free set, and put the parent's back in place.
-                let free = replace(&mut self.free, parent_free);
+                // Take out our captured set, and put the parent's back in place.
+                let captured = replace(&mut self.captured, parent_captured);
 
-                // Include this lambda's free variables in the parent's set.
-                self.free.extend(&free);
+                // Include this lambda's captured variables in the parent's set.
+                self.captured.extend(&captured);
 
-                // Record this lambda's free set.
-                self.lambdas.insert(id, free);
+                // Record this lambda's captured set.
+                self.lambdas.insert(id, captured);
 
                 // kthx
                 Ok(())
@@ -148,7 +147,7 @@ mod test {
 
         // These should always be empty at the end of any traversal.
         assert!(cm.scopes.is_empty());
-        assert!(cm.free.is_empty());
+        assert!(cm.captured.is_empty());
 
         Ok(cm)
     }
