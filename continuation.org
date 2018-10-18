@@ -5,6 +5,18 @@ Git is the backtrace; this is the continuation.
 %%% = 1-5 days
 %%%% = big
 
+* closure
+- [ ] typing the run-time environment:
+  - [ ] `Plan` generic over environment type passed to `Run`
+  - [ ] types implement `Plan` conditionally on the environment giving them what
+        they need: CoreDump access, lexical access
+- [ ] CaptureMap::lambdas needs to be a Vec, with each lambda guaranteed to
+  appear before all lambdas it encloses.
+- [ ] CaptureMap::lambdas needs to record the parent lambda id, as well.
+- [ ] Build ClosureLayouts from from CaptureMap.
+- [ ] Thread an environment type through all planning functions
+- [ ] Plan lambda, app, var as directed by ClosureLayouts
+
 * internal cleanups
 - [ ] %% use interned atoms for identifiers, instead of strings (crate string_cache?)
 - [ ] %% Change `Stream<'a>` to `Stream<T>`, make `Stream` independent?
