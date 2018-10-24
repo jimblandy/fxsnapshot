@@ -21,6 +21,7 @@ Git is the backtrace; this is the continuation.
 - [ ] %% use interned atoms for identifiers, instead of strings (crate string_cache?)
 - [ ] %% Change `Stream<'a>` to `Stream<T>`, make `Stream` independent?
 - [ ] %% Change `TryUnwrap` to `FromValue`? so you'd write `Stream<'a>::from_value`?
+- [ ] %% Common `BoxedClone` trait for `ClonableStream` and `ClonableCallable`?
 - [ ] %% trait for structs from which we can fetch fields by name?
 - [ ] %% rearrange into parse, analyze, plan; put `Plan` and `Globals` in `query/mod.rs`.
 - [ ] %%% finish fallible-iterator
@@ -35,6 +36,7 @@ Git is the backtrace; this is the continuation.
   BreadthFirst should implement FallibleIterator
 - [ ] %% avoid exposing hash table nondeterminism (just keep a sorted list of ids)
 - [ ] %% How to turn a list of edges into a list of the nodes referred to? (map?)
+- [ ] %% tail recursion, by adding a trampoline variant to the `ClonableCallable::call` return type
 - [ ] %%% closures
 - [ ] %%% should paths be their own type? might be nice
 - [ ] %%% nicknames for nodes/edges
