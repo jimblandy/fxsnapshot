@@ -11,7 +11,7 @@ Git is the backtrace; this is the continuation.
   - [ ] types implement `Plan` conditionally on the environment giving them what
         they need: CoreDump access, lexical access
 - [ ] CaptureMap::lambdas needs to be a Vec, with each lambda guaranteed to
-  appear before all lambdas it encloses.
+      appear before all lambdas it encloses.
 - [ ] CaptureMap::lambdas needs to record the parent lambda id, as well.
 - [ ] Build ClosureLayouts from from CaptureMap.
 - [ ] Thread an environment type through all planning functions
@@ -33,10 +33,11 @@ Git is the backtrace; this is the continuation.
 - [ ] %% distinguish 'shortestPaths', 'allPaths'
 - [ ] %% pathsfrom
 - [ ] %% bug: `paths` assumes core dump edges and id's are all well-formed;
-  BreadthFirst should implement FallibleIterator
+      BreadthFirst should implement FallibleIterator
 - [ ] %% avoid exposing hash table nondeterminism (just keep a sorted list of ids)
 - [ ] %% How to turn a list of edges into a list of the nodes referred to? (map?)
-- [ ] %% tail recursion, by adding a trampoline variant to the `ClonableCallable::call` return type
+- [ ] %% tail recursion, by adding a trampoline variant to the
+      `ClonableCallable::call` return type
 - [ ] %%% closures
 - [ ] %%% should paths be their own type? might be nice
 - [ ] %%% nicknames for nodes/edges
@@ -52,11 +53,11 @@ Git is the backtrace; this is the continuation.
 * performance
 - [ ] %% put expensive streams on their own threads
 - [ ] %%% Could some Streams be double-ended?
-  HashMap::Iter isn't double-ended, so iterating over nodes couldn't be, unless
-  we were using a sorted id list. Order of 'edges' is meaningless. bfs can't.
-  But literals and paths are ordered. Should compare execution time of 'root
-  paths ends id: 0x7f412ebb2040' with and without, since that ends up actually
-  drawing all elements from each path, without double-endedness.
+      HashMap::Iter isn't double-ended, so iterating over nodes couldn't be, unless
+      we were using a sorted id list. Order of 'edges' is meaningless. bfs can't.
+      But literals and paths are ordered. Should compare execution time of 'root
+      paths ends id: 0x7f412ebb2040' with and without, since that ends up actually
+      drawing all elements from each path, without double-endedness.
 - [ ] %%% Can EqualPredicate cache its given value? (A 'once_cache' in the global environment?)
 - [ ] %%% specialize to avoid dynamic dispatch for constants and variable references
       (once we can actually write code large enough to benchmark)
@@ -68,8 +69,8 @@ Git is the backtrace; this is the continuation.
 
 * command-line usability
 - [ ] %% Operate directly on compressed files. However, decompressing a 13MiB
-  snapshot takes about 0.3s, so it's probably nice to retain the ability to
-  operate on uncompressed files by just mapping them into memory.
+      snapshot takes about 0.3s, so it's probably nice to retain the ability to
+      operate on uncompressed files by just mapping them into memory.
 - [ ] %% publish as crate
 
 * ideas that need development
