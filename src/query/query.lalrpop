@@ -80,7 +80,7 @@ Var: Var = {
     <Id> => Var::Lexical { name: <>, id: UseId(0) },
 };
 
-Lambda: Box<Expr> = "|" <formals: Comma<Id>> "|" <body: Expr<"">> =>
+Lambda: Box<Expr> = "|" <formals: OneOrMoreComma<Id>> "|" <body: Expr<"">> =>
     Box::new(Expr::Lambda { formals, body, id: LambdaId(0) });
 
 PredicateOp: PredicateOp = {
@@ -140,5 +140,13 @@ Comma<T>: Vec<T> = {
             v.push(e);
             v
         }
+    }
+};
+
+OneOrMoreComma<T>: Vec<T> = {
+    <v:(<T> ",")*> <e:T> ","? => {
+        let mut v = v;
+        v.push(e);
+        v
     }
 };
