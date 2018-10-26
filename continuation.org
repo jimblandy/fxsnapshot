@@ -18,9 +18,14 @@ Git is the backtrace; this is the continuation.
 - [ ] Plan lambda, app, var as directed by ClosureLayouts
 
 * internal cleanups
+- [ ] % reverse order of arguments to `impl_value_variant`, to more closely
+      match how variants are defined
+- [ ] % computation of `paths_iter` is horrible
 - [ ] %% use interned atoms for identifiers, instead of strings (crate string_cache?)
 - [ ] %% Change `Stream<'a>` to `Stream<T>`, make `Stream` independent?
 - [ ] %% Change `TryUnwrap` to `FromValue`? so you'd write `Stream<'a>::from_value`?
+      Could this clean up the `let stream ...; let stream ...;` ugliness?
+  Could this handle the borrowed-Value case more gracefully?
 - [ ] %% Common `BoxedClone` trait for `ClonableStream` and `ClonableCallable`?
 - [ ] %% trait for structs from which we can fetch fields by name?
 - [ ] %% rearrange into parse, analyze, plan; put `Plan` and `Globals` in `query/mod.rs`.
@@ -52,12 +57,16 @@ Git is the backtrace; this is the continuation.
 
 * performance
 - [ ] %% put expensive streams on their own threads
-- [ ] %%% Could some Streams be double-ended?
-      HashMap::Iter isn't double-ended, so iterating over nodes couldn't be, unless
-      we were using a sorted id list. Order of 'edges' is meaningless. bfs can't.
-      But literals and paths are ordered. Should compare execution time of 'root
-      paths ends id: 0x7f412ebb2040' with and without, since that ends up actually
-      drawing all elements from each path, without double-endedness.
+- [ ] %% Internal structure of streams should be shared, and cloned only when
+      we need to produce a value from them. Lazily cloning iterator adapters,
+      that hold a `Cow<Rc<I>>` of the underlying iterator, and call `to_mut` to
+      clone it when the first value is requested?
+- [ ] %%% Could some Streams be double-ended? HashMap::Iter isn't double-ended,
+      so iterating over nodes couldn't be, unless we were using a sorted id
+      list. Order of 'edges' is meaningless. bfs can't. But literals and paths
+      are ordered. Should compare execution time of 'root paths ends id:
+      0x7f412ebb2040' with and without, since without double-endedness that ends
+      up actually drawing all elements from each path.
 - [ ] %%% Can EqualPredicate cache its given value? (A 'once_cache' in the global environment?)
 - [ ] %%% specialize to avoid dynamic dispatch for constants and variable references
       (once we can actually write code large enough to benchmark)
