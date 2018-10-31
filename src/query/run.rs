@@ -17,7 +17,6 @@ use dump::{Edge, Node, NodeId};
 
 use std::fmt;
 use std::iter::once;
-use std::rc::Rc;
 
 #[derive(Default)]
 struct ExprLabeler {
@@ -275,7 +274,7 @@ struct StreamLiteral(Vec<Box<Plan>>);
 impl Plan for StreamLiteral {
     fn run<'a>(&'a self, env: &'a Env<'a>) -> EvalResult<'a> {
         let iter = fallible_iterator::convert(self.0.iter().map(move |p| p.run(env)));
-        Ok(Value::from(Rc::new(Stream::new(iter))))
+        Ok(Value::from(Stream::new(iter)))
     }
 }
 
@@ -284,7 +283,7 @@ struct First(Box<Plan>);
 impl Plan for First {
     fn run<'a>(&'a self, env: &'a Env<'a>) -> EvalResult<'a> {
         let value = self.0.run(env)?;
-        let mut stream = Stream::unshare(value.try_unwrap()?);
+        let mut stream: Stream = value.try_unwrap()?;
         match stream.next()? {
             Some(v) => Ok(v),
             None => Err(value::Error::EmptyStream),
@@ -305,7 +304,7 @@ struct Nodes;
 impl Plan for Nodes {
     fn run<'a>(&'a self, env: &'a Env<'a>) -> EvalResult<'a> {
         let iter = fallible_iterator::convert(env.dump.nodes().map(|n| Ok(n.into())));
-        Ok(Value::from(Rc::new(Stream::new(iter))))
+        Ok(Value::from(Stream::new(iter)))
     }
 }
 
@@ -317,7 +316,7 @@ impl Plan for NodesById {
         let id = NodeId(value.try_unwrap()?);
         let optional_node = env.dump.get_node(id).map(|on| Ok(Value::from(on)));
         let iter = fallible_iterator::convert(optional_node.into_iter());
-        Ok(Value::from(Rc::new(Stream::new(iter))))
+        Ok(Value::from(Stream::new(iter)))
     }
 }
 
@@ -329,7 +328,7 @@ impl Plan for Edges {
         let node: &Node = value.try_unwrap()?;
         let iter = node.edges.iter().map(|e| Ok(Value::from(e)));
         let iter = fallible_iterator::convert(iter);
-        Ok(Rc::new(Stream::new(iter)).into())
+        Ok(Value::from(Stream::new(iter)))
     }
 }
 
@@ -341,9 +340,9 @@ struct Filter {
 impl Plan for Filter {
     fn run<'a>(&'a self, env: &'a Env<'a>) -> EvalResult<'a> {
         let value = self.stream.run(env)?;
-        let stream  = Stream::unshare(value.try_unwrap()?);
+        let stream: Stream = value.try_unwrap()?;
         let iter = stream.filter(move |item| self.filter.test(env, item));
-        Ok(Value::from(Rc::new(Stream::new(iter))))
+        Ok(Value::from(Stream::new(iter)))
     }
 }
 
@@ -355,8 +354,7 @@ impl Plan for Paths {
         let mut traversal = BreadthFirst::new(env.dump);
         match value {
             Value::Node(node) => traversal.add_start_node(node.id),
-            Value::Stream(stream) => {
-                let mut stream = Stream::unshare(stream);
+            Value::Stream(mut stream) => {
                 while let Some(elt) = stream.next()? {
                     let node: &Node<'a> = elt.try_unwrap()?;
                     traversal.add_start_node(node.id);
@@ -386,14 +384,14 @@ impl Plan for Paths {
                             let referent = env.dump.get_node(edge.referent.unwrap()).unwrap();
                             once(Value::from(edge)).chain(once(Value::from(referent)))
                         })).map(Ok);
-                    Some(Rc::new(Stream::new(fallible_iterator::convert(iter))))
+                    Some(Stream::new(fallible_iterator::convert(iter)))
                 }
             })
             .map(Value::from)
             .map(Ok);
-        Ok(Value::from(Rc::new(Stream::new(fallible_iterator::convert(
+        Ok(Value::from(Stream::new(fallible_iterator::convert(
             paths_iter,
-        )))))
+        ))))
     }
 }
 
@@ -464,8 +462,8 @@ fn get_edge_field<'v>(edge: &'v Edge, field: &str) -> Result<Option<Value<'v>>, 
 struct Ends(Box<PredicatePlan>);
 impl PredicatePlan for Ends {
     fn test<'a>(&'a self, env: &'a Env<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
-        let stream = Stream::unshare_ref(value.try_unwrap_ref()?);
-        let last = stream.last()?.ok_or(value::Error::EmptyStream)?;
+        let stream: &Stream = value.try_unwrap_ref()?;
+        let last = stream.clone().last()?.ok_or(value::Error::EmptyStream)?;
         self.0.test(env, &last)
     }
 }
@@ -560,8 +558,8 @@ fn plan_junction<J: BlahJunction>(subterms: &[Predicate]) -> PlanOrTrivial {
 struct Any(Box<PredicatePlan>);
 impl PredicatePlan for Any {
     fn test<'a>(&'a self, env: &'a Env<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
-        let mut stream = Stream::unshare_ref(value.try_unwrap_ref()?);
-        Ok(stream.any(|element| self.0.test(env, &element))?)
+        let stream: &Stream = value.try_unwrap_ref()?;
+        Ok(stream.clone().any(|element| self.0.test(env, &element))?)
     }
 }
 
@@ -569,8 +567,8 @@ impl PredicatePlan for Any {
 struct All(Box<PredicatePlan>);
 impl PredicatePlan for All {
     fn test<'a>(&'a self, env: &'a Env<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
-        let mut stream = Stream::unshare_ref(value.try_unwrap_ref()?);
-        Ok(stream.all(|element| self.0.test(env, &element))?)
+        let stream: &Stream = value.try_unwrap_ref()?;
+        Ok(stream.clone().all(|element| self.0.test(env, &element))?)
     }
 }
 
@@ -578,8 +576,8 @@ impl PredicatePlan for All {
 struct Empty;
 impl PredicatePlan for Empty {
     fn test<'a>(&'a self, _env: &'a Env<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
-        let mut stream = Stream::unshare_ref(value.try_unwrap_ref()?);
-        Ok(stream.next()?.is_none())
+        let stream: &Stream = value.try_unwrap_ref()?;
+        Ok(stream.clone().next()?.is_none())
     }
 }
 
@@ -587,7 +585,7 @@ impl PredicatePlan for Empty {
 struct NonEmpty;
 impl PredicatePlan for NonEmpty {
     fn test<'a>(&'a self, _env: &'a Env<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
-        let mut stream = Stream::unshare_ref(value.try_unwrap_ref()?);
-        Ok(stream.next()?.is_some())
+        let stream: &Stream = value.try_unwrap_ref()?;
+        Ok(stream.clone().next()?.is_some())
     }
 }

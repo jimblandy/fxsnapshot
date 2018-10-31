@@ -20,33 +20,18 @@ pub enum Value<'a> {
     String(String),
     Edge(&'a Edge<'a>),
     Node(&'a Node<'a>),
-
-    // This `Rc` and the `Box` in the `Stream` struct are both necessary, and
-    // each serves different purposes.
-    //
-    // A stream value in a query must represent the same sequence of values each
-    // time it's operated on, but consuming values from a stream is a
-    // destructive operation, so a stream must be cloned before we can draw
-    // values from it. An `Rc` holds its contents immutable, forcing us to do
-    // this clone, while also bounding the cost of cloning a `Value`.
-    //
-    // The `Box` forms the trait objects necessary for us to build trees of
-    // adapters (filter, map) dynamically, as directed by the query expression.
-    // Unlike `Rc`, `Box` implements `DerefMut`, so it's suitable for use in the
-    // midst of the iterator structure, since `Iterator::next` requires `&mut
-    // self`. And `Box`'s `Clone` is a deep copy, as required for preparing the
-    // iterators for use.
-    Stream(Rc<Stream<'a>>),
+    Stream(Stream<'a>),
 }
 
 /// The result of evaluating an expression: either a value, or a
 /// [`value::Error`](#type.Error).
 pub type EvalResult<'a> = Result<Value<'a>, Error>;
 
-pub struct Stream<'a>(Box<'a + CloneableStream<'a>>);
+#[derive(Clone)]
+pub struct Stream<'a>(Rc<'a + CloneableStream<'a>>);
 
 pub trait CloneableStream<'a> {
-    fn boxed_clone(&self) -> Box<'a + CloneableStream<'a>>;
+    fn rc_clone(&self) -> Rc<'a + CloneableStream<'a>>;
     fn cs_next(&mut self) -> Result<Option<Value<'a>>, Error>;
 }
 
@@ -114,7 +99,7 @@ impl<'a> Value<'a> {
             Value::Edge(e) => write!(stream, "{:?}", e)?,
             Value::Node(n) => write!(stream, "{:?}", n)?,
             Value::Stream(s) => {
-                return write_stream(Stream::unshare_ref(s), orientation, stream);
+                return write_stream(s, orientation, stream);
             }
         }
         Ok(())
@@ -132,10 +117,11 @@ impl<'a> Value<'a> {
 }
 
 fn write_stream<'a>(
-    mut stream: Stream<'a>,
+    stream: &Stream<'a>,
     orientation: &Orientation,
     output: &mut io::Write,
 ) -> Result<(), failure::Error> {
+    let mut stream = stream.clone();
     match orientation {
         Orientation::Horizontal(indent) => {
             // Any streams nested within this one should be laid out vertically,
@@ -229,14 +215,14 @@ impl_value_variant!(u64, Number, "number");
 impl_value_variant!(String, String, "string");
 impl_value_variant!(&'a Edge<'a>, Edge, "edge");
 impl_value_variant!(&'a Node<'a>, Node, "node");
-impl_value_variant!(Rc<Stream<'a>>, Stream, "stream");
+impl_value_variant!(Stream<'a>, Stream, "stream");
 
 impl<'a, I> CloneableStream<'a> for I
 where
     I: 'a + FallibleIterator<Item = Value<'a>, Error = Error> + Clone,
 {
-    fn boxed_clone(&self) -> Box<'a + CloneableStream<'a>> {
-        Box::new(self.clone())
+    fn rc_clone(&self) -> Rc<'a + CloneableStream<'a>> {
+        Rc::new(self.clone())
     }
 
     fn cs_next(&mut self) -> Result<Option<Value<'a>>, Error> {
@@ -249,21 +235,7 @@ impl<'a> Stream<'a> {
     where
         I: 'a + CloneableStream<'a>,
     {
-        Stream(Box::new(iter))
-    }
-
-    pub fn unshare(rc: Rc<Stream<'a>>) -> Stream<'a> {
-        Rc::try_unwrap(rc).unwrap_or_else(|rc| (*rc).clone())
-    }
-
-    pub fn unshare_ref(rc: &Rc<Stream<'a>>) -> Stream<'a> {
-        (**rc).clone()
-    }
-}
-
-impl<'a> Clone for Stream<'a> {
-    fn clone(&self) -> Self {
-        Stream(self.0.boxed_clone())
+        Stream(Rc::new(iter))
     }
 }
 
@@ -271,6 +243,15 @@ impl<'a> FallibleIterator for Stream<'a> {
     type Item = Value<'a>;
     type Error = Error;
     fn next(&mut self) -> Result<Option<Value<'a>>, Error> {
-        self.0.cs_next()
+        // If we're sharing the underlying iterator tree with anyone, we need
+        // exclusive access to it before we draw values from it, since `next`
+        // has side effects.
+        if Rc::strong_count(&self.0) > 1 {
+            self.0 = self.0.rc_clone();
+        }
+
+        // We ensured that we are the sole owner of `self.0`, so this unwrap
+        // should always succeed.
+        Rc::get_mut(&mut self.0).unwrap().cs_next()
     }
 }
