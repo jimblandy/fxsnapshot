@@ -1,3 +1,4 @@
+use super::stream;
 use dump::{Edge, Node};
 use failure;
 
@@ -5,7 +6,6 @@ use fallible_iterator::FallibleIterator;
 
 use std::cmp::PartialEq;
 use std::io;
-use std::rc::Rc;
 
 /// A value produced by evaluating an expression.
 ///
@@ -23,17 +23,11 @@ pub enum Value<'a> {
     Stream(Stream<'a>),
 }
 
+pub type Stream<'a> = stream::Stream<'a, Value<'a>, Error>;
+
 /// The result of evaluating an expression: either a value, or a
 /// [`value::Error`](#type.Error).
 pub type EvalResult<'a> = Result<Value<'a>, Error>;
-
-#[derive(Clone)]
-pub struct Stream<'a>(Rc<'a + CloneableStream<'a>>);
-
-pub trait CloneableStream<'a> {
-    fn rc_clone(&self) -> Rc<'a + CloneableStream<'a>>;
-    fn cs_next(&mut self) -> Result<Option<Value<'a>>, Error>;
-}
 
 /// An error raised during expression evaluation.
 #[derive(Clone, Fail, Debug)]
@@ -216,42 +210,3 @@ impl_value_variant!(String, String, "string");
 impl_value_variant!(&'a Edge<'a>, Edge, "edge");
 impl_value_variant!(&'a Node<'a>, Node, "node");
 impl_value_variant!(Stream<'a>, Stream, "stream");
-
-impl<'a, I> CloneableStream<'a> for I
-where
-    I: 'a + FallibleIterator<Item = Value<'a>, Error = Error> + Clone,
-{
-    fn rc_clone(&self) -> Rc<'a + CloneableStream<'a>> {
-        Rc::new(self.clone())
-    }
-
-    fn cs_next(&mut self) -> Result<Option<Value<'a>>, Error> {
-        <Self as FallibleIterator>::next(self)
-    }
-}
-
-impl<'a> Stream<'a> {
-    pub fn new<I>(iter: I) -> Stream<'a>
-    where
-        I: 'a + CloneableStream<'a>,
-    {
-        Stream(Rc::new(iter))
-    }
-}
-
-impl<'a> FallibleIterator for Stream<'a> {
-    type Item = Value<'a>;
-    type Error = Error;
-    fn next(&mut self) -> Result<Option<Value<'a>>, Error> {
-        // If we're sharing the underlying iterator tree with anyone, we need
-        // exclusive access to it before we draw values from it, since `next`
-        // has side effects.
-        if Rc::strong_count(&self.0) > 1 {
-            self.0 = self.0.rc_clone();
-        }
-
-        // We ensured that we are the sole owner of `self.0`, so this unwrap
-        // should always succeed.
-        Rc::get_mut(&mut self.0).unwrap().cs_next()
-    }
-}

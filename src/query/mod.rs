@@ -43,6 +43,7 @@
 //! [glob](struct.Globals.html)
 mod ast;
 mod breadth_first;
+mod stream;
 mod env;
 mod run;
 mod value;
