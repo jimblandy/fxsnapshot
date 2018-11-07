@@ -92,17 +92,18 @@ pub enum StaticError {
 pub trait Plan: fmt::Debug {
     /// Execute the plan `self` in the given environment, producing either a
     /// `Value` or an error.
-    fn run<'a>(&'a self, &'a Env<'a>) -> EvalResult<'a>;
+    fn run<'a>(&self, &Env<'a>) -> EvalResult<'a>;
 }
 
 /// A plan for evaluating a predicate on a `Value`.
 pub trait PredicatePlan: fmt::Debug {
     /// Determine whether this predicate, executed in the given environment,
     /// matches `value`.
-    fn test<'a>(&'a self, &'a Env<'a>, &Value<'a>) -> Result<bool, value::Error>;
+    fn test<'a>(&self, &Env<'a>, &Value<'a>) -> Result<bool, value::Error>;
 }
 
 /// The environment in which plans and predicates are executed.
+#[derive(Clone)]
 pub struct Env<'a> {
     pub dump: &'a CoreDump<'a>,
 }
