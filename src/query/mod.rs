@@ -1,50 +1,7 @@
-//! Parsing, planning, and executing queries.
-//!
-//! We use a few central types and traits for running queries:
-//!
-//! - [`Expr`][expr] represents a syntactically well-formed expression.
-//!   This is what `query::ExprParser` constructs.
-//!
-//! - The [`Plan`][plan] trait is for types that represent a specific plan of
-//!   execution. This has a `run` method which actually returns the value
-//!   resulting from a particular evaluation. Queries are compiled to a
-//!   `Box<Plan>`.
-//!
-//! - The [`Globals`][glob] struct represents the overall environment in which
-//!   evaluation takes place. At the moment, this just carries the `CoreDump`
-//!   around, but as the language becomes more capable, perhaps there will be
-//!   more things here.
-//!
-//! - The [`Value`][value] type represents a run-time value: a number, string, node,
-//!   edge, or stream thereof.
-//!
-//! An `Expr` represents an expression that is well-formed syntactically, but
-//! may not correspond to the evaluation strategy we want to use. For example:
-//!
-//!     nodes { id: 0x12345 }
-//!
-//! This expression produces a stream of all the nodes in the `CoreDump` just to
-//! find the one with the given id. This is extremely inefficient: it should
-//! simply try to look up the node with the given id, and produce a stream of
-//! zero or one nodes.
-//!
-//! Evaluating by simply walking the `Expr` directly is straightforward, but it
-//! intertwines the code for performing optimizations with the code for actually
-//! carrying out the computation, so everything gets a little more difficult to
-//! work with.
-//!
-//! Instead, we perform optimization ('planning') up front, and produce a tree
-//! of values that implements the `Plan` trait, which can be run to yield a
-//! `Value` or an `Error`.
-//!
-//! [expr](ast/enum.Expr.html)
-//! [plan](run/trait.Plan.html)
-//! [value](value/enum.Value.html)
-//! [glob](struct.Globals.html)
 mod ast;
 mod breadth_first;
 mod stream;
-mod env;
+mod fun;
 mod run;
 mod value;
 mod walkers;
@@ -56,55 +13,74 @@ mod grammar {
     include!(concat!(env!("OUT_DIR"), "/query/query.rs"));
 }
 
+pub use self::fun::Activation;
 pub use self::grammar::Token;
 pub use self::value::{EvalResult, Value};
 
-use self::run::label_exprs;
 use dump::CoreDump;
-
-pub type ParseError<'input> = lalrpop_util::ParseError<usize, Token<'input>, &'static str>;
-
 use self::grammar::QueryParser;
+use self::run::label_exprs;
 use self::run::plan_expr;
-
 use std::fmt;
-
-pub fn compile(query_text: &str) -> Result<Box<Plan>, ParseError> {
-    let mut expr = QueryParser::new().parse(&query_text)?;
-    label_exprs(&mut expr);
-    eprintln!("labeled expr: {:?}", expr);
-    env::debug_captures(&expr);
-    let plan = plan_expr(&expr);
-    eprintln!("plan: {:#?}", plan);
-    Ok(plan)
-}
-
-/// An error raised during query planning.
-#[derive(Clone, Fail, Debug)]
-pub enum StaticError {
-    #[fail(display = "unbound variable '{}'", name)]
-    UnboundVar { name: String },
-}
 
 /// A plan of evaluation. We translate each query expression into a tree of
 /// `Plan` values, which serve as the code for a sort of indirect-threaded
 /// interpreter.
 pub trait Plan: fmt::Debug {
-    /// Execute the plan `self` in the given environment, producing either a
-    /// `Value` or an error.
-    fn run<'a>(&self, &Env<'a>) -> EvalResult<'a>;
+    /// Execute the plan `self` in the given context and activation, producing
+    /// either a `Value` or an error.
+    ///
+    /// Use `Context::from_dump` to construct an initial `Context`.
+    /// `Activation::for_eval` constructs an `Activation` appropriate for
+    /// running plans returned by `compile`.
+    fn run<'a, 'd>(&self, &'a Activation<'a, 'd>, &Context<'d>) -> EvalResult<'d>;
 }
 
 /// A plan for evaluating a predicate on a `Value`.
 pub trait PredicatePlan: fmt::Debug {
     /// Determine whether this predicate, executed in the given environment,
     /// matches `value`.
-    fn test<'a>(&self, &Env<'a>, &Value<'a>) -> Result<bool, value::Error>;
+    fn test<'a, 'd>(&self, &Value<'d>, &Activation<'a, 'd>, &Context<'d>) -> Result<bool, value::Error>;
 }
 
-/// The environment in which plans and predicates are executed.
+/// An execution context: general parameters for the entire query, like which
+/// dump it's operating on.
 #[derive(Clone)]
-pub struct Env<'a> {
+pub struct Context<'a> {
+    /// The heap snapshot that operators like `nodes` and `root` should consult.
     pub dump: &'a CoreDump<'a>,
 }
 
+impl<'a> Context<'a> {
+    pub fn from_dump(dump: &'a CoreDump<'a>) -> Context<'a> {
+        Context { dump }
+    }
+}
+
+pub fn compile(query_text: &str) -> Result<Box<Plan>, StaticError> {
+    let mut expr = QueryParser::new().parse(&query_text)?;
+    label_exprs(&mut expr);
+    eprintln!("labeled expr: {:?}", expr);
+    fun::debug_captures(&expr);
+    let plan = plan_expr(&expr);
+    eprintln!("plan: {:#?}", plan);
+    Ok(plan)
+}
+
+pub type ParseError<'input> = lalrpop_util::ParseError<usize, Token<'input>, &'static str>;
+
+/// An error raised during query planning.
+#[derive(Clone, Fail, Debug)]
+pub enum StaticError {
+    #[fail(display = "error parsing query: {}", _0)]
+    Parse(String),
+
+    #[fail(display = "unbound variable '{}'", name)]
+    UnboundVar { name: String },
+}
+
+impl<'input> From<ParseError<'input>> for StaticError {
+    fn from(parse_error: ParseError<'input>) -> StaticError {
+        StaticError::Parse(parse_error.to_string())
+    }
+}

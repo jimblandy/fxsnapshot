@@ -10,9 +10,11 @@ use regex;
 
 use super::ast::{Expr, LambdaId, Predicate, PredicateOp, UseId, Var};
 use super::breadth_first::{BreadthFirst, Step};
+use super::Activation;
+use super::Context;
 use super::value::{self, EvalResult, Stream, TryUnwrap, Value};
 use super::walkers::ExprWalkerMut;
-use super::{Env, Plan, PredicatePlan};
+use super::{Plan, PredicatePlan};
 use dump::{Edge, Node, NodeId};
 
 use std::fmt;
@@ -69,7 +71,7 @@ pub fn plan_expr(expr: &Expr) -> Box<Plan> {
         Expr::Number(n) => Box::new(Const(*n)),
         Expr::String(s) => Box::new(Const(s.clone())),
         Expr::StreamLiteral(elts) => {
-            Box::new(StreamLiteral(Rc::new(elts.iter().map(|b| plan_expr(b)).collect())))
+            Box::new(StreamLiteral(elts.iter().map(|b| plan_expr(b)).collect()))
         }
         Expr::Predicate(stream, op, predicate) => plan_stream(op, stream, predicate),
 
@@ -137,7 +139,7 @@ fn plan_filter(stream: &Expr, predicate: &Predicate) -> Box<Plan> {
 
         // If the predicate will never match, then the result is always an empty
         // stream.
-        PlanOrTrivial::Trivial(false) => Box::new(StreamLiteral(Rc::new(vec![]))),
+        PlanOrTrivial::Trivial(false) => Box::new(StreamLiteral(vec![])),
 
         // If the predicate is interesting, then filter the result from the
         // stream.
@@ -264,20 +266,18 @@ where
     T: Clone,
     for<'a> Value<'a>: From<T>,
 {
-    fn run<'a>(&self, _env: &Env<'a>) -> EvalResult<'a> {
+    fn run<'a, 'd>(&self, _act: &'a Activation<'a, 'd>, _cx: &Context<'d>) -> EvalResult<'d> {
         Ok(Value::from(self.0.clone()))
     }
 }
 
 #[derive(Debug)]
-struct StreamLiteral(Rc<Vec<Box<Plan>>>);
+struct StreamLiteral(Vec<Box<Plan>>);
 
 impl Plan for StreamLiteral {
-    fn run<'a>(&self, env: &Env<'a>) -> EvalResult<'a> {
-        let env = env.clone();
-        let plans = self.0.clone();
-        let iter = (0 .. plans.len()).map(move |i| plans[i].run(&env));
-        let iter = fallible_iterator::convert(iter);
+    fn run<'a, 'd>(&self, act: &'a Activation<'a, 'd>, cx: &Context<'d>) -> EvalResult<'d> {
+        let values: Vec<_> = self.0.iter().map(|p| p.run(act, cx)).collect();
+        let iter = fallible_iterator::convert(values.into_iter());
         Ok(Value::from(Stream::new(iter)))
     }
 }
@@ -285,8 +285,8 @@ impl Plan for StreamLiteral {
 #[derive(Debug)]
 struct First(Box<Plan>);
 impl Plan for First {
-    fn run<'a>(&self, env: &Env<'a>) -> EvalResult<'a> {
-        let value = self.0.run(env)?;
+    fn run<'a, 'd>(&self, act: &'a Activation<'a, 'd>, cx: &Context<'d>) -> EvalResult<'d> {
+        let value = self.0.run(act, cx)?;
         let mut stream: Stream = value.try_unwrap()?;
         match stream.next()? {
             Some(v) => Ok(v),
@@ -298,16 +298,16 @@ impl Plan for First {
 #[derive(Debug)]
 struct Root;
 impl Plan for Root {
-    fn run<'a>(&self, env: &Env<'a>) -> EvalResult<'a> {
-        Ok(Value::from(env.dump.get_root()))
+    fn run<'a, 'd>(&self, _act: &'a Activation<'a, 'd>, cx: &Context<'d>) -> EvalResult<'d> {
+        Ok(Value::from(cx.dump.get_root()))
     }
 }
 
 #[derive(Debug)]
 struct Nodes;
 impl Plan for Nodes {
-    fn run<'a>(&self, env: &Env<'a>) -> EvalResult<'a> {
-        let iter = fallible_iterator::convert(env.dump.nodes().map(|n| Ok(n.into())));
+    fn run<'a, 'd>(&self, _act: &'a Activation<'a, 'd>, cx: &Context<'d>) -> EvalResult<'d> {
+        let iter = fallible_iterator::convert(cx.dump.nodes().map(|n| Ok(n.into())));
         Ok(Value::from(Stream::new(iter)))
     }
 }
@@ -315,10 +315,10 @@ impl Plan for Nodes {
 #[derive(Debug)]
 struct NodesById(Box<Plan>);
 impl Plan for NodesById {
-    fn run<'a>(&self, env: &Env<'a>) -> EvalResult<'a> {
-        let value = self.0.run(env)?;
+    fn run<'a, 'd>(&self, act: &'a Activation<'a, 'd>, cx: &Context<'d>) -> EvalResult<'d> {
+        let value = self.0.run(act, cx)?;
         let id = NodeId(value.try_unwrap()?);
-        let optional_node = env.dump.get_node(id).map(|on| Ok(Value::from(on)));
+        let optional_node = cx.dump.get_node(id).map(|on| Ok(Value::from(on)));
         let iter = fallible_iterator::convert(optional_node.into_iter());
         Ok(Value::from(Stream::new(iter)))
     }
@@ -327,8 +327,8 @@ impl Plan for NodesById {
 #[derive(Debug)]
 struct Edges(Box<Plan>);
 impl Plan for Edges {
-    fn run<'a>(&self, env: &Env<'a>) -> EvalResult<'a> {
-        let value = self.0.run(env)?;
+    fn run<'a, 'd>(&self, act: &'a Activation<'a, 'd>, cx: &Context<'d>) -> EvalResult<'d> {
+        let value = self.0.run(act, cx)?;
         let node: &Node = value.try_unwrap()?;
         let iter = node.edges.iter().map(|e| Ok(Value::from(e)));
         let iter = fallible_iterator::convert(iter);
@@ -342,22 +342,17 @@ struct Filter {
     filter: Rc<PredicatePlan>,
 }
 impl Plan for Filter {
-    fn run<'a>(&self, env: &Env<'a>) -> EvalResult<'a> {
-        let value = self.stream.run(env)?;
-        let stream: Stream = value.try_unwrap()?;
-        let filter = self.filter.clone();
-        let env = env.clone();
-        let iter = stream.filter(move |item| filter.test(&env, item));
-        Ok(Value::from(Stream::new(iter)))
+    fn run<'a, 'd>(&self, _act: &'a Activation<'a, 'd>, _cx: &Context<'d>) -> EvalResult<'d> {
+        unimplemented!("<Filter as Plan>::run")
     }
 }
 
 #[derive(Debug)]
 struct Paths(Box<Plan>);
 impl Plan for Paths {
-    fn run<'a>(&self, env: &Env<'a>) -> EvalResult<'a> {
-        let value = self.0.run(env)?;
-        let mut traversal = BreadthFirst::new(env.dump);
+    fn run<'a, 'd>(&self, act: &'a Activation<'a, 'd>, cx: &Context<'d>) -> EvalResult<'d> {
+        let value = self.0.run(act, cx)?;
+        let mut traversal = BreadthFirst::new(cx.dump);
         match value {
             Value::Node(node) => traversal.add_start_node(node.id),
             Value::Stream(mut stream) => {
@@ -376,7 +371,7 @@ impl Plan for Paths {
 
         // The traversal produces a stream of paths, where each path is
         // itself a stream of alternating nodes and edges.
-        let dump = env.dump;
+        let dump = cx.dump;
         let paths_iter = traversal
             .filter_map(move |path| {
                 if path.is_empty() {
@@ -405,8 +400,8 @@ impl Plan for Paths {
 #[derive(Debug)]
 struct EqualPredicate(Box<Plan>);
 impl PredicatePlan for EqualPredicate {
-    fn test<'a>(&self, env: &Env<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
-        let given = self.0.run(env)?;
+    fn test<'a, 'd>(&self, value: &Value<'d>, act: &Activation<'a, 'd>, cx: &Context<'d>) -> Result<bool, value::Error> {
+        let given = self.0.run(act, cx)?;
         Ok(*value == given)
     }
 }
@@ -417,7 +412,7 @@ struct FieldPredicate {
     predicate: Box<PredicatePlan>,
 }
 impl PredicatePlan for FieldPredicate {
-    fn test<'a>(&self, env: &Env<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
+    fn test<'a, 'd>(&self, value: &Value<'d>, act: &Activation<'a, 'd>, cx: &Context<'d>) -> Result<bool, value::Error> {
         let field = match value {
             Value::Node(node) => get_node_field(node, &self.field_name)?,
             Value::Edge(edge) => get_edge_field(edge, &self.field_name)?,
@@ -429,7 +424,7 @@ impl PredicatePlan for FieldPredicate {
             }
         };
         field.map_or(Ok(false), |field_value| {
-            self.predicate.test(env, &field_value)
+            self.predicate.test(&field_value, act, cx)
         })
     }
 }
@@ -468,17 +463,17 @@ fn get_edge_field<'v>(edge: &'v Edge, field: &str) -> Result<Option<Value<'v>>, 
 #[derive(Debug)]
 struct Ends(Box<PredicatePlan>);
 impl PredicatePlan for Ends {
-    fn test<'a>(&self, env: &Env<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
+    fn test<'a, 'd>(&self, value: &Value<'d>, act: &Activation<'a, 'd>, cx: &Context<'d>) -> Result<bool, value::Error> {
         let stream: &Stream = value.try_unwrap_ref()?;
         let last = stream.clone().last()?.ok_or(value::Error::EmptyStream)?;
-        self.0.test(env, &last)
+        self.0.test(&last, act, cx)
     }
 }
 
 #[derive(Debug)]
 struct Regex(regex::Regex);
 impl PredicatePlan for Regex {
-    fn test<'a>(&self, _env: &Env<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
+    fn test<'a, 'd>(&self, value: &Value<'d>, _act: &Activation<'a, 'd>, _cx: &Context<'d>) -> Result<bool, value::Error> {
         let string: &String = value.try_unwrap_ref()?;
         Ok(self.0.is_match(&string))
     }
@@ -487,24 +482,24 @@ impl PredicatePlan for Regex {
 #[derive(Debug)]
 struct And(Vec<Box<PredicatePlan>>);
 impl PredicatePlan for And {
-    fn test<'a>(&self, env: &Env<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
-        fallible_iterator::convert(self.0.iter().map(Ok)).all(|plan| plan.test(env, value))
+    fn test<'a, 'd>(&self, value: &Value<'d>, act: &Activation<'a, 'd>, cx: &Context<'d>) -> Result<bool, value::Error> {
+        fallible_iterator::convert(self.0.iter().map(Ok)).all(|plan| plan.test(value, act, cx))
     }
 }
 
 #[derive(Debug)]
 struct Or(Vec<Box<PredicatePlan>>);
 impl PredicatePlan for Or {
-    fn test<'a>(&self, env: &Env<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
-        fallible_iterator::convert(self.0.iter().map(Ok)).any(|plan| plan.test(env, value))
+    fn test<'a, 'd>(&self, value: &Value<'d>, act: &Activation<'a, 'd>, cx: &Context<'d>) -> Result<bool, value::Error> {
+        fallible_iterator::convert(self.0.iter().map(Ok)).any(|plan| plan.test(value, act, cx))
     }
 }
 
 #[derive(Debug)]
 struct Not(Box<PredicatePlan>);
 impl PredicatePlan for Not {
-    fn test<'a>(&self, env: &Env<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
-        Ok(!self.0.test(env, value)?)
+    fn test<'a, 'd>(&self, value: &Value<'d>, act: &Activation<'a, 'd>, cx: &Context<'d>) -> Result<bool, value::Error> {
+        Ok(!self.0.test(value, act, cx)?)
     }
 }
 
@@ -564,25 +559,25 @@ fn plan_junction<J: BlahJunction>(subterms: &[Predicate]) -> PlanOrTrivial {
 #[derive(Debug)]
 struct Any(Box<PredicatePlan>);
 impl PredicatePlan for Any {
-    fn test<'a>(&self, env: &Env<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
+    fn test<'a, 'd>(&self, value: &Value<'d>, act: &Activation<'a, 'd>, cx: &Context<'d>) -> Result<bool, value::Error> {
         let stream: &Stream = value.try_unwrap_ref()?;
-        Ok(stream.clone().any(|element| self.0.test(env, &element))?)
+        Ok(stream.clone().any(|element| self.0.test(&element, act, cx))?)
     }
 }
 
 #[derive(Debug)]
 struct All(Box<PredicatePlan>);
 impl PredicatePlan for All {
-    fn test<'a>(&self, env: &Env<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
+    fn test<'a, 'd>(&self, value: &Value<'d>, act: &Activation<'a, 'd>, cx: &Context<'d>) -> Result<bool, value::Error> {
         let stream: &Stream = value.try_unwrap_ref()?;
-        Ok(stream.clone().all(|element| self.0.test(env, &element))?)
+        Ok(stream.clone().all(|element| self.0.test(&element, act, cx))?)
     }
 }
 
 #[derive(Debug)]
 struct Empty;
 impl PredicatePlan for Empty {
-    fn test<'a>(&self, _env: &Env<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
+    fn test<'a, 'd>(&self, value: &Value<'d>, _act: &Activation<'a, 'd>, _cx: &Context<'d>) -> Result<bool, value::Error> {
         let stream: &Stream = value.try_unwrap_ref()?;
         Ok(stream.clone().next()?.is_none())
     }
@@ -591,7 +586,7 @@ impl PredicatePlan for Empty {
 #[derive(Debug)]
 struct NonEmpty;
 impl PredicatePlan for NonEmpty {
-    fn test<'a>(&self, _env: &Env<'a>, value: &Value<'a>) -> Result<bool, value::Error> {
+    fn test<'a, 'd>(&self, value: &Value<'d>, _act: &Activation<'a, 'd>, _cx: &Context<'d>) -> Result<bool, value::Error> {
         let stream: &Stream = value.try_unwrap_ref()?;
         Ok(stream.clone().next()?.is_some())
     }

@@ -1,10 +1,100 @@
+use super::{Context, EvalResult, Plan, StaticError, Value};
 use super::ast::{Expr, LambdaId, UseId, Var};
+use super::value::Callable;
 use super::walkers::ExprWalker;
-use super::StaticError;
 
 use std::collections::{HashMap, HashSet};
+use std::borrow::Cow;
 use std::fmt;
 use std::mem::replace;
+use std::rc::Rc;
+
+/// Data for a function activation. The details are private to the function
+/// machinery; they are created by function calls, and used by argument
+/// references.
+pub struct Activation<'act, 'dump> {
+    /// The closure we are currently executing. For evaluation, this points to a
+    /// dummy `Closure`.
+    closure: &'act Closure<'dump>,
+
+    /// The actual parameters passed to this closure by the call. For
+    /// evaluation, this is an empty slice.
+    actuals: &'act [Value<'dump>],
+}
+
+/// A `Function` created by evaluating a lambda expression.
+#[derive(Clone)]
+struct Closure<'a> {
+    /// Information shared by all closures created from this lambda expression.
+    lambda: Rc<LambdaExpr>,
+
+    /// A vector of captured variables' values, referred to by `Captured` plans.
+    /// Possibly borrowed by some stack frames, if we're running this closure at
+    /// the moment.
+    captured: Vec<Value<'a>>,
+}
+
+/// Information about a given lambda expression, shared by all closures created
+/// by evaluating it.
+#[derive(Debug)]
+struct LambdaExpr {
+    /// The name of this closure.
+    name: String,
+
+    /// The number of formal parameters it takes.
+    arity: usize,
+
+    /// An evaluation plan for the body of the closure.
+    body: Box<Plan>,
+}
+
+impl<'a, 'd> Activation<'a, 'd> {
+    /// Create an activation suitable for an eval.
+    pub fn for_eval() -> Activation<'a, 'd> {
+        unimplemented!()
+    }
+}
+
+impl<'dump> Callable<'dump> for Closure<'dump> {
+    fn call_exact_arity(&self, actuals: &[Value<'dump>], cx: &Context<'dump>)
+                        -> EvalResult<'dump>
+    {
+        // Create a fresh activation to evaluate the body in, providing the
+        // closure we're calling and the actual parameters it was passed.
+        let actuals = actuals.to_owned();
+        let activation = Activation {
+            closure: self,
+            actuals: &actuals,
+        };
+        self.lambda.body.run(&activation, cx)
+    }
+
+    fn arity(&self) -> usize {
+        self.lambda.arity
+    }
+
+    fn name(&self) -> Cow<str> {
+        Cow::Borrowed(&self.lambda.name)
+    }
+}
+
+/// A use of a captured variable's value.
+#[derive(Debug)]
+struct Captured(usize);
+impl Plan for Captured {
+    fn run<'a, 'd>(&self, act: &'a Activation<'a, 'd>, _cx: &Context<'d>) -> EvalResult<'d> {
+        Ok(act.closure.captured[self.0].clone())
+    }
+}
+
+/// A use of an argument passed to the closure.
+#[derive(Debug)]
+struct Actual(usize);
+impl Plan for Actual {
+    fn run<'a, 'd>(&self, act: &'a Activation<'a, 'd>, _cx: &Context<'d>) -> EvalResult<'d> {
+        Ok(act.actuals[self.0].clone())
+    }
+}
 
 /// An identifier for a lexical variable.
 ///
@@ -22,6 +112,16 @@ impl fmt::Debug for VarAddr {
     }
 }
 
+/// Information about a particular use of a variable.
+#[derive(Debug)]
+struct Use {
+    /// The lambda in which the use occurs, if any.
+    lambda: Option<LambdaId>,
+
+    /// The variable the use refers to.
+    referent: VarAddr,
+}
+
 #[derive(Debug, Default)]
 struct CaptureMap<'expr> {
     /// The parameter lists of the lambdas currently in scope at this point in
@@ -31,8 +131,8 @@ struct CaptureMap<'expr> {
     /// A map from each lambda to the set of variables it captures.
     lambdas: HashMap<LambdaId, HashSet<VarAddr>>,
 
-    /// A map from each variable use to the variable it refers to.
-    uses: HashMap<UseId, VarAddr>,
+    /// Information about each variable use.
+    uses: HashMap<UseId, Use>,
 
     /// The set of variables we've seen used so far within the innermost lambda
     /// at this point in the traversal.
@@ -65,9 +165,10 @@ impl<'expr> ExprWalker<'expr> for CaptureMap<'expr> {
     fn visit_expr(&mut self, expr: &'expr Expr) -> Result<(), StaticError> {
         match expr {
             &Expr::Var(Var::Lexical { id, ref name }) => {
-                if let Some(addr) = self.find_var(name) {
-                    self.uses.insert(id, addr);
-                    self.captured.insert(addr);
+                if let Some(referent) = self.find_var(name) {
+                    let lambda = self.scopes.last().map(|(id, _)| *id);
+                    self.uses.insert(id, Use { lambda, referent });
+                    self.captured.insert(referent);
                 } else {
                     return Err(StaticError::UnboundVar {
                         name: name.to_owned(),
@@ -122,6 +223,62 @@ pub fn debug_captures(expr: &Expr) {
         .visit_expr(expr)
         .expect("error mapping captures");
     eprintln!("{:#?}", capture_map);
+}
+
+/// Places a variable's value might live at run time.
+#[derive(Debug)]
+enum VarLocation {
+    /// The value of the parameter with the given index.
+    Argument(usize),
+
+    /// The value at the given index in the current closure's `captured` vector.
+    Closure(usize),
+}
+
+/// Information about a closure's arguments and captured values.
+#[derive(Debug)]
+struct Layout {
+    /// A map from each variable that occurs free in this closure's body to the
+    /// `VarLocation` at which it should be found.
+    locations: HashMap<VarAddr, VarLocation>,
+
+    /// When we construct a `Closure` for this lambda, where to find each value
+    /// that belongs in its `captured` vector. The `i`'th element says where to
+    /// find the value of `captured[i]`. Note that these are the locations
+    /// in the closure's *enclosing* code.
+    to_capture: Vec<VarLocation>,
+}
+
+#[derive(Debug, Default)]
+struct ClosureLayouts {
+    /// The layout for each lambda.
+    locations: HashMap<LambdaId, Layout>,
+
+    /// A map from each variable use to the `VarLocation` at which it should
+    /// find the variable's value.
+    referents: HashMap<UseId, VarLocation>
+}
+
+/*
+impl ClosureLayouts {
+    fn from_capture_map(cm: CaptureMap) -> AllLayouts {
+        // Lay out each lambda's closure.
+        for (lambda, captures) in cm.lambdas {
+            // 
+            for capture in captures {
+                
+            }
+        }
+    }
+}
+*/
+
+#[derive(Debug)]
+struct Crash(&'static str);
+impl Plan for Crash {
+    fn run<'a, 'd>(&self, _act: &'a Activation<'a, 'd>, _cx: &Context<'d>) -> EvalResult<'d> {
+        panic!("{}", self.0);
+    }
 }
 
 #[cfg(test)]
@@ -250,3 +407,4 @@ mod test {
         );
     }
 }
+
