@@ -1,7 +1,7 @@
 use super::{Context, EvalResult, Plan, StaticError, Value};
 use super::ast::{Expr, LambdaId, UseId, Var};
 use super::value::Callable;
-use super::walkers::ExprWalker;
+use super::walkers::{ExprWalker, ExprWalkerMut};
 
 use std::collections::{HashMap, HashSet};
 use std::borrow::Cow;
@@ -94,6 +94,50 @@ impl Plan for Actual {
     fn run<'a, 'd>(&self, act: &'a Activation<'a, 'd>, _cx: &Context<'d>) -> EvalResult<'d> {
         Ok(act.actuals[self.0].clone())
     }
+}
+
+#[derive(Default)]
+struct ExprLabeler {
+    next_lambda: usize,
+    next_use: usize,
+}
+
+impl ExprLabeler {
+    fn new() -> ExprLabeler {
+        ExprLabeler::default()
+    }
+
+    fn next_lambda(&mut self) -> LambdaId {
+        let next = self.next_lambda;
+        self.next_lambda = next + 1;
+        LambdaId(next)
+    }
+
+    fn next_use(&mut self) -> UseId {
+        let next = self.next_use;
+        self.next_use = next + 1;
+        UseId(next)
+    }
+}
+
+impl<'e> ExprWalkerMut<'e> for ExprLabeler {
+    type Error = ();
+    fn visit_expr(&mut self, expr: &'e mut Expr) -> Result<(), ()> {
+        match expr {
+            Expr::Lambda { id, .. } => {
+                *id = self.next_lambda();
+            }
+            Expr::Var(Var::Lexical { id, .. }) => {
+                *id = self.next_use();
+            }
+            _ => (),
+        }
+        self.visit_expr_children(expr)
+    }
+}
+
+pub fn label_exprs(expr: &mut Expr) {
+    ExprLabeler::new().visit_expr(expr).unwrap();
 }
 
 /// An identifier for a lexical variable.

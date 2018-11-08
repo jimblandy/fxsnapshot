@@ -18,8 +18,8 @@ pub use self::grammar::Token;
 pub use self::value::{EvalResult, Value};
 
 use dump::CoreDump;
+use self::fun::label_exprs;
 use self::grammar::QueryParser;
-use self::run::label_exprs;
 use self::run::plan_expr;
 use std::fmt;
 
