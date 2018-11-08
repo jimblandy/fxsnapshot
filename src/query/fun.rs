@@ -225,28 +225,33 @@ pub fn debug_captures(expr: &Expr) {
     eprintln!("{:#?}", capture_map);
 }
 
-/// Places a variable's value might live at run time.
+/// Places a variable's value might live in an `Activation`.
 #[derive(Debug)]
 enum VarLocation {
     /// The value of the parameter with the given index.
     Argument(usize),
 
     /// The value at the given index in the current closure's `captured` vector.
-    Closure(usize),
+    Captured(usize),
 }
 
-/// Information about a closure's arguments and captured values.
+/// For a given lambda, where to find the values of captured variables and
+/// actual parameters it uses.
 #[derive(Debug)]
 struct Layout {
-    /// A map from each variable that occurs free in this closure's body to the
-    /// `VarLocation` at which it should be found.
-    locations: HashMap<VarAddr, VarLocation>,
+    /// How to build the `captured` vector of a `Closure` for this lambda, from
+    /// the information available in the lambda's lexical context.
+    ///
+    /// Each `to_capture[i]` says where to find the value that belongs in
+    /// `captured[i]`. Note that, since this is describing how to build the
+    /// closure, these are the homes those values occupy *outside* the lambda,
+    /// not the homes they will have in the closure.
+    source: Vec<VarLocation>,
 
-    /// When we construct a `Closure` for this lambda, where to find each value
-    /// that belongs in its `captured` vector. The `i`'th element says where to
-    /// find the value of `captured[i]`. Note that these are the locations
-    /// in the closure's *enclosing* code.
-    to_capture: Vec<VarLocation>,
+    /// A map from each variable that occurs free in this lambda's body to the
+    /// location at which its value can be found in an `Activation` of that
+    /// lambda.
+    location: HashMap<VarAddr, VarLocation>,
 }
 
 #[derive(Debug, Default)]
