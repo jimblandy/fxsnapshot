@@ -19,6 +19,7 @@ Git is the backtrace; this is the continuation.
 
 * internal cleanups
 - [ ] % Could the lifetimes on Plan and PredicatePlan be simplified?
+- [ ] % Rename `Plan` to `ExprPlan`, for symmetry with `PredicatePlan`.
 - [ ] % reverse order of arguments to `impl_value_variant`, to more closely
       match how variants are defined
 - [ ] % computation of `paths_iter` is horrible
