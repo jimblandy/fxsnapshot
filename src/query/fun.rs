@@ -113,7 +113,7 @@ impl fmt::Debug for VarAddr {
 }
 
 /// Information about a particular use of a variable.
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 struct Use {
     /// The lambda in which the use occurs, if any.
     lambda: Option<LambdaId>,
@@ -123,25 +123,39 @@ struct Use {
 }
 
 #[derive(Debug, Default)]
-struct CaptureMap<'expr> {
-    /// The parameter lists of the lambdas currently in scope at this point in
-    /// the traversal. Outer lambdas appear before inner lambdas.
-    scopes: Vec<(LambdaId, &'expr Vec<String>)>,
-
-    /// A map from each lambda to the set of variables it captures.
+struct CaptureMap {
+    /// For each lambda, the set of variables it captures.
     lambdas: HashMap<LambdaId, HashSet<VarAddr>>,
 
     /// Information about each variable use.
     uses: HashMap<UseId, Use>,
+}
+
+#[derive(Debug, Default)]
+struct CaptureMapBuilder<'expr> {
+    /// The CaptureMap we're building.
+    map: CaptureMap,
+
+    /// The parameter lists of the lambdas currently in scope at this point in
+    /// the traversal. Outer lambdas appear before inner lambdas.
+    scopes: Vec<(LambdaId, &'expr Vec<String>)>,
 
     /// The set of variables we've seen used so far within the innermost lambda
     /// at this point in the traversal.
     captured: HashSet<VarAddr>,
 }
 
-impl<'e> CaptureMap<'e> {
-    fn new() -> CaptureMap<'e> {
-        CaptureMap::default()
+impl<'e> CaptureMapBuilder<'e> {
+    fn new() -> CaptureMapBuilder<'e> {
+        CaptureMapBuilder::default()
+    }
+
+    fn build(self) -> CaptureMap {
+        // These should always be empty at the end of any traversal.
+        assert!(self.scopes.is_empty());
+        assert!(self.captured.is_empty());
+
+        self.map
     }
 
     /// If there is a variable with the given `name` in scope, return its
@@ -159,7 +173,7 @@ impl<'e> CaptureMap<'e> {
     }
 }
 
-impl<'expr> ExprWalker<'expr> for CaptureMap<'expr> {
+impl<'expr> ExprWalker<'expr> for CaptureMapBuilder<'expr> {
     type Error = StaticError;
 
     fn visit_expr(&mut self, expr: &'expr Expr) -> Result<(), StaticError> {
@@ -167,7 +181,7 @@ impl<'expr> ExprWalker<'expr> for CaptureMap<'expr> {
             &Expr::Var(Var::Lexical { id, ref name }) => {
                 if let Some(referent) = self.find_var(name) {
                     let lambda = self.scopes.last().map(|(id, _)| *id);
-                    self.uses.insert(id, Use { lambda, referent });
+                    self.map.uses.insert(id, Use { lambda, referent });
                     self.captured.insert(referent);
                 } else {
                     return Err(StaticError::UnboundVar {
@@ -207,7 +221,7 @@ impl<'expr> ExprWalker<'expr> for CaptureMap<'expr> {
                 self.captured.extend(&captured);
 
                 // Record this lambda's captured set.
-                self.lambdas.insert(id, captured);
+                self.map.lambdas.insert(id, captured);
 
                 // kthx
                 Ok(())
@@ -218,11 +232,11 @@ impl<'expr> ExprWalker<'expr> for CaptureMap<'expr> {
 }
 
 pub fn debug_captures(expr: &Expr) {
-    let mut capture_map = CaptureMap::new();
-    capture_map
-        .visit_expr(expr)
+    let mut builder = CaptureMapBuilder::new();
+    builder.visit_expr(expr)
         .expect("error mapping captures");
-    eprintln!("{:#?}", capture_map);
+    let map = builder.build();
+    eprintln!("{:#?}", map);
 }
 
 /// Places a variable's value might live in an `Activation`.
@@ -259,14 +273,14 @@ struct ClosureLayouts {
     /// The layout for each lambda.
     locations: HashMap<LambdaId, Layout>,
 
-    /// A map from each variable use to the `VarLocation` at which it should
-    /// find the variable's value.
+    /// For each variable use, where its value can be found in an `Activation`
+    /// for its lambda.
     referents: HashMap<UseId, VarLocation>
 }
 
 /*
 impl ClosureLayouts {
-    fn from_capture_map(cm: CaptureMap) -> AllLayouts {
+    fn from_capture_map(cm: CaptureMapBuilder) -> AllLayouts {
         // Lay out each lambda's closure.
         for (lambda, captures) in cm.lambdas {
             // 
@@ -288,11 +302,10 @@ impl Plan for Crash {
 
 #[cfg(test)]
 mod test {
-    use super::{CaptureMap, VarAddr};
+    use super::{CaptureMap, CaptureMapBuilder, VarAddr};
     use query::ast::{Expr, LambdaId, UseId};
     use query::test_utils::*;
     use query::walkers::ExprWalker;
-    use query::StaticError;
     use std::collections::{HashMap, HashSet};
     use std::iter::FromIterator;
 
@@ -303,21 +316,17 @@ mod test {
         }
     }
 
-    fn make_capture_map(expr: &Expr) -> Result<CaptureMap, StaticError> {
-        let mut cm = CaptureMap::new();
-        cm.visit_expr(expr)?;
-
-        // These should always be empty at the end of any traversal.
-        assert!(cm.scopes.is_empty());
-        assert!(cm.captured.is_empty());
-
-        Ok(cm)
+    fn make_capture_map(expr: &Expr) -> CaptureMap {
+        let mut builder = CaptureMapBuilder::new();
+        builder.visit_expr(expr)
+            .expect("build capture map");
+        builder.build()
     }
 
     #[test]
     fn trivial() {
         let expr = root();
-        let cm = make_capture_map(&expr).expect("map capture");
+        let cm = make_capture_map(&expr);
         assert!(cm.lambdas.is_empty());
         assert!(cm.uses.is_empty());
     }
@@ -325,7 +334,7 @@ mod test {
     #[test]
     fn single_lambda() {
         let expr = lambda(70, &["x", "y", "z"], app(var(38, "y"), var(92, "z")));
-        let cm = make_capture_map(&expr).expect("map capture");
+        let cm = make_capture_map(&expr);
         assert_eq!(
             cm.lambdas,
             HashMap::from_iter(vec![
@@ -348,7 +357,7 @@ mod test {
             &["x", "y"],
             lambda(193, &["z", "w"], app(var(215, "y"), var(50, "z"))),
         );
-        let cm = make_capture_map(&expr).expect("map capture");
+        let cm = make_capture_map(&expr);
         assert_eq!(
             cm.lambdas,
             HashMap::from_iter(vec![
@@ -387,7 +396,7 @@ mod test {
                 ),
             ),
         );
-        let cm = make_capture_map(&expr).expect("map capture");
+        let cm = make_capture_map(&expr);
         assert_eq!(
             cm.lambdas,
             HashMap::from_iter(vec![
