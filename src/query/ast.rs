@@ -1,5 +1,6 @@
 //! A query expression, syntactically well-formed.
 
+use id_vec::IdVecIndex;
 use regex;
 use std::boxed::FnBox;
 use std::fmt;
@@ -27,6 +28,8 @@ pub enum Expr {
 #[derive(Clone, Copy, Eq, PartialEq, Hash)]
 pub struct LambdaId(pub usize);
 
+impl_id_vec_index!(LambdaId);
+
 impl fmt::Debug for LambdaId {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         write!(fmt, "λ{:?}", self.0)
@@ -35,6 +38,8 @@ impl fmt::Debug for LambdaId {
 
 #[derive(Clone, Copy, Eq, PartialEq, Hash)]
 pub struct UseId(pub usize);
+
+impl_id_vec_index!(UseId);
 
 impl fmt::Debug for UseId {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {

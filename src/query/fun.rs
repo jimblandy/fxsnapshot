@@ -1,3 +1,4 @@
+use id_vec::IdVec;
 use super::{Context, EvalResult, Plan, StaticError, Value};
 use super::ast::{Expr, LambdaId, UseId, Var};
 use super::value::Callable;
@@ -97,6 +98,17 @@ impl Plan for Actual {
 }
 
 #[derive(Default)]
+/// An `ExprWalkerMut` that assigns a distinct label to each node in the AST
+/// that needs one, for the benefit of closure layout.
+///
+/// This assigns `LambdaId`s and `UseId`s starting at zero, with no gaps. You
+/// can use the `ExprLabeler`'s `lambda_count` and `use_count` methods to get
+/// the number of ids of each type that were assigned, to estimate table
+/// capacities.
+///
+/// This assigns `LambdaId`s such that every lambda expression's id is greater
+/// than its parent's. This means that iterating over `LambdaId`'s in numeric
+/// order does a pre-order, depth-first traversal of the lambdas.
 struct ExprLabeler {
     next_lambda: usize,
     next_use: usize,
@@ -117,6 +129,14 @@ impl ExprLabeler {
         let next = self.next_use;
         self.next_use = next + 1;
         UseId(next)
+    }
+
+    fn lambda_count(&self) -> usize {
+        self.next_lambda
+    }
+
+    fn use_count(&self) -> usize {
+        self.next_use
     }
 }
 
@@ -169,10 +189,10 @@ struct Use {
 #[derive(Debug, Default)]
 struct CaptureMap {
     /// For each lambda, the set of variables it captures.
-    lambdas: HashMap<LambdaId, HashSet<VarAddr>>,
+    lambdas: IdVec<LambdaId, HashSet<VarAddr>>,
 
     /// Information about each variable use.
-    uses: HashMap<UseId, Use>,
+    uses: IdVec<UseId, Use>,
 }
 
 #[derive(Debug, Default)]
@@ -225,7 +245,7 @@ impl<'expr> ExprWalker<'expr> for CaptureMapBuilder<'expr> {
             &Expr::Var(Var::Lexical { id, ref name }) => {
                 if let Some(referent) = self.find_var(name) {
                     let lambda = self.scopes.last().map(|(id, _)| *id);
-                    self.map.uses.insert(id, Use { lambda, referent });
+                    self.map.uses.push_at(id, Use { lambda, referent });
                     self.captured.insert(referent);
                 } else {
                     return Err(StaticError::UnboundVar {
@@ -265,7 +285,7 @@ impl<'expr> ExprWalker<'expr> for CaptureMapBuilder<'expr> {
                 self.captured.extend(&captured);
 
                 // Record this lambda's captured set.
-                self.map.lambdas.insert(id, captured);
+                self.map.lambdas.push_at(id, captured);
 
                 // kthx
                 Ok(())

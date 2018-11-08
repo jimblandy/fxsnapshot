@@ -24,8 +24,8 @@ Git is the backtrace; this is the continuation.
       match how variants are defined
 - [ ] % computation of `paths_iter` is horrible
 - [ ] % `Callable` is a stupid lexeme, they're Functions
-- [ ] %% make ExprLabeler guarantee dense numbering and estimate capacity,
-      number parents before children, then use Vec instead of HashMap
+- [ ] % give up on 'organizing' the uses into extern, std, and intra-crate, just
+      sort them
 - [ ] %% use interned atoms for identifiers, instead of strings (crate string_cache?)
 - [ ] %% Change `TryUnwrap` to `FromValue`? so you'd write `Stream<'a>::from_value`?
       Could this clean up the `let stream ...; let stream ...;` ugliness?

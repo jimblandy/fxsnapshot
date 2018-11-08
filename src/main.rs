@@ -11,6 +11,9 @@ extern crate memmap;
 extern crate quick_protobuf;
 extern crate regex;
 
+#[macro_use]
+mod id_vec;
+
 // extern crate uses
 use failure::{Error, ResultExt};
 use memmap::Mmap;
