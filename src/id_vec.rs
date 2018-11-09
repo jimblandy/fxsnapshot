@@ -89,3 +89,11 @@ macro_rules! impl_id_vec_index {
         }
     }
 }
+
+impl<I, T> IntoIterator for IdVec<I, T> {
+    type Item = T;
+    type IntoIter = std::vec::IntoIter<T>;
+    fn into_iter(self) -> std::vec::IntoIter<T> {
+        self.0.into_iter()
+    }
+}

@@ -25,7 +25,7 @@ pub enum Expr {
     },
 }
 
-#[derive(Clone, Copy, Eq, PartialEq, Hash)]
+#[derive(Clone, Copy, Eq, Ord, PartialEq, PartialOrd, Hash)]
 pub struct LambdaId(pub usize);
 
 impl_id_vec_index!(LambdaId);
@@ -36,7 +36,7 @@ impl fmt::Debug for LambdaId {
     }
 }
 
-#[derive(Clone, Copy, Eq, PartialEq, Hash)]
+#[derive(Clone, Copy, Eq, Ord, PartialEq, PartialOrd, Hash)]
 pub struct UseId(pub usize);
 
 impl_id_vec_index!(UseId);

@@ -26,6 +26,7 @@ Git is the backtrace; this is the continuation.
 - [ ] % `Callable` is a stupid lexeme, they're Functions
 - [ ] % give up on 'organizing' the uses into extern, std, and intra-crate, just
       sort them
+- [ ] %% Make `IdVec` iteration produce (index, value) pairs
 - [ ] %% use interned atoms for identifiers, instead of strings (crate string_cache?)
 - [ ] %% Change `TryUnwrap` to `FromValue`? so you'd write `Stream<'a>::from_value`?
       Could this clean up the `let stream ...; let stream ...;` ugliness?

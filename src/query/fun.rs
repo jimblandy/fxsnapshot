@@ -7,6 +7,7 @@ use super::walkers::{ExprWalker, ExprWalkerMut};
 use std::collections::{HashMap, HashSet};
 use std::borrow::Cow;
 use std::fmt;
+use std::iter::FromIterator;
 use std::mem::replace;
 use std::rc::Rc;
 
@@ -164,7 +165,7 @@ pub fn label_exprs(expr: &mut Expr) {
 ///
 /// A value `VarNum { lambda, index }` refers to the `index`'th formal parameter
 /// of the lambda expression whose id is `lambda`.
-#[derive(Clone, Copy, Eq, PartialEq, Hash)]
+#[derive(Clone, Copy, Eq, Ord, PartialEq, PartialOrd, Hash)]
 struct VarAddr {
     lambda: LambdaId,
     index: usize,
@@ -176,9 +177,22 @@ impl fmt::Debug for VarAddr {
     }
 }
 
+/// Information about a particular lambda expression.
+#[derive(Debug)]
+struct LambdaInfo {
+    /// The number of formal parameters this lambda expects.
+    arity: usize,
+
+    /// The id of the immediately enclosing lambda, if any.
+    parent: Option<LambdaId>,
+
+    /// The set of variables this lambda captures.
+    captured: HashSet<VarAddr>,
+}
+
 /// Information about a particular use of a variable.
 #[derive(Debug, Eq, PartialEq)]
-struct Use {
+struct UseInfo {
     /// The lambda in which the use occurs, if any.
     lambda: Option<LambdaId>,
 
@@ -188,11 +202,11 @@ struct Use {
 
 #[derive(Debug, Default)]
 struct CaptureMap {
-    /// For each lambda, the set of variables it captures.
-    lambdas: IdVec<LambdaId, HashSet<VarAddr>>,
+    /// Information about each lambda.
+    lambdas: IdVec<LambdaId, LambdaInfo>,
 
     /// Information about each variable use.
-    uses: IdVec<UseId, Use>,
+    uses: IdVec<UseId, UseInfo>,
 }
 
 #[derive(Debug, Default)]
@@ -241,11 +255,11 @@ impl<'expr> ExprWalker<'expr> for CaptureMapBuilder<'expr> {
     type Error = StaticError;
 
     fn visit_expr(&mut self, expr: &'expr Expr) -> Result<(), StaticError> {
+        let enclosing = self.scopes.last().map(|(id, _)| *id);
         match expr {
             &Expr::Var(Var::Lexical { id, ref name }) => {
                 if let Some(referent) = self.find_var(name) {
-                    let lambda = self.scopes.last().map(|(id, _)| *id);
-                    self.map.uses.push_at(id, Use { lambda, referent });
+                    self.map.uses.push_at(id, UseInfo { lambda: enclosing, referent });
                     self.captured.insert(referent);
                 } else {
                     return Err(StaticError::UnboundVar {
@@ -257,6 +271,18 @@ impl<'expr> ExprWalker<'expr> for CaptureMapBuilder<'expr> {
             &Expr::Lambda {
                 id, ref formals, ..
             } => {
+                let arity = formals.len();
+
+                // Since `self.map.lambdas` is an `IdVec`, it must be built in
+                // order of increasing id, so parents must come before children.
+                // We need to create the entry for this lambda before we visit
+                // its children. We can fill in the captured set afterwards.
+                self.map.lambdas.push_at(id, LambdaInfo {
+                    arity,
+                    parent: enclosing,
+                    captured: Default::default()
+                });
+
                 // When we recurse, we want to find the set of captured
                 // variables for this lambda alone. Create a fresh `HashSet`,
                 // and drop it in as our `captured` while we walk this lambda's
@@ -285,7 +311,7 @@ impl<'expr> ExprWalker<'expr> for CaptureMapBuilder<'expr> {
                 self.captured.extend(&captured);
 
                 // Record this lambda's captured set.
-                self.map.lambdas.push_at(id, captured);
+                self.map.lambdas[id].captured = captured;
 
                 // kthx
                 Ok(())
@@ -295,16 +321,8 @@ impl<'expr> ExprWalker<'expr> for CaptureMapBuilder<'expr> {
     }
 }
 
-pub fn debug_captures(expr: &Expr) {
-    let mut builder = CaptureMapBuilder::new();
-    builder.visit_expr(expr)
-        .expect("error mapping captures");
-    let map = builder.build();
-    eprintln!("{:#?}", map);
-}
-
 /// Places a variable's value might live in an `Activation`.
-#[derive(Debug)]
+#[derive(Clone, Copy)]
 enum VarLocation {
     /// The value of the parameter with the given index.
     Argument(usize),
@@ -313,9 +331,18 @@ enum VarLocation {
     Captured(usize),
 }
 
+impl fmt::Debug for VarLocation {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        match self {
+            VarLocation::Argument(i) => write!(fmt, "arg #{}", i),
+            VarLocation::Captured(i) => write!(fmt, "cap #{}", i),
+        }
+    }
+}
+
 /// For a given lambda, where to find the values of captured variables and
 /// actual parameters it uses.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct Layout {
     /// How to build the `captured` vector of a `Closure` for this lambda, from
     /// the information available in the lambda's lexical context.
@@ -324,37 +351,94 @@ struct Layout {
     /// `captured[i]`. Note that, since this is describing how to build the
     /// closure, these are the homes those values occupy *outside* the lambda,
     /// not the homes they will have in the closure.
-    source: Vec<VarLocation>,
+    captured: Vec<VarLocation>,
 
     /// A map from each variable that occurs free in this lambda's body to the
     /// location at which its value can be found in an `Activation` of that
     /// lambda.
-    location: HashMap<VarAddr, VarLocation>,
+    locations: HashMap<VarAddr, VarLocation>,
 }
 
 #[derive(Debug, Default)]
 struct ClosureLayouts {
     /// The layout for each lambda.
-    locations: HashMap<LambdaId, Layout>,
+    lambdas: IdVec<LambdaId, Layout>,
 
     /// For each variable use, where its value can be found in an `Activation`
     /// for its lambda.
-    referents: HashMap<UseId, VarLocation>
+    referents: IdVec<UseId, VarLocation>
 }
 
-/*
 impl ClosureLayouts {
-    fn from_capture_map(cm: CaptureMapBuilder) -> AllLayouts {
-        // Lay out each lambda's closure.
-        for (lambda, captures) in cm.lambdas {
-            // 
-            for capture in captures {
-                
+    fn from_capture_map(cm: CaptureMap) -> ClosureLayouts {
+        let mut layouts = ClosureLayouts::default();
+
+        // First, lay out each lambda's closure. Visit parents before children,
+        // so the children can use the parent's layout to find the variables
+        // they need to capture.
+        for (lambda, LambdaInfo { arity, parent, captured }) in cm.lambdas.into_iter().enumerate() {
+            let lambda = LambdaId(lambda);
+            let mut layout = Layout::default();
+
+            // Our formals are available directly from the Activation.
+            for index in 0..arity {
+                let formal = VarAddr { lambda, index };
+                layout.locations.insert(formal, VarLocation::Argument(index));
+            }
+
+            // Variables bound in outer lambdas must be captured when this
+            // closure is created, and fetched from the closure's `captured`
+            // vector at run time.
+            if let Some(parent) = parent {
+                // Get a map of where our enclosing lambda stashed all the
+                // values we need.
+                let parent_locations = &layouts.lambdas[parent].locations;
+
+                // List the variables we capture. Sort to avoid being influenced
+                // by the HashSet iteration order.
+                let mut captured = Vec::from_iter(captured.into_iter());
+                captured.sort();
+
+                // Build the vector indicating where each captured variable can
+                // be found in our parent's activation, and the map of where
+                // they can be found in our activation.
+                for addr in captured {
+                    layout.locations.insert(addr, VarLocation::Captured(layout.captured.len()));
+                    layout.captured.push(parent_locations[&addr]);
+                }
+            } else {
+                // This is a top-level lambda, so it had better not have any
+                // captured variables!
+                assert!(captured.is_empty());
+            }
+
+            layouts.lambdas.push_at(lambda, layout);
+        }
+
+        // Now discover the location to which each variable use refers.
+        for (use_id, UseInfo { lambda, referent }) in cm.uses.into_iter().enumerate() {
+            let use_id = UseId(use_id);
+            if let Some(lambda) = lambda {
+                let location = layouts.lambdas[lambda].locations[&referent];
+                layouts.referents.push_at(use_id, location);
+            } else {
+                unimplemented!("references to global variables");
             }
         }
+
+        layouts
     }
 }
-*/
+
+pub fn debug_captures(expr: &Expr) {
+    let mut builder = CaptureMapBuilder::new();
+    builder.visit_expr(expr).expect("error mapping captures");
+    let map = builder.build();
+    eprintln!("{:#?}", map);
+
+    let layouts = ClosureLayouts::from_capture_map(map);
+    eprintln!("{:#?}", layouts);
+}
 
 #[derive(Debug)]
 struct Crash(&'static str);
