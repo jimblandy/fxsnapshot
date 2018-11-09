@@ -13,12 +13,11 @@ mod grammar {
     include!(concat!(env!("OUT_DIR"), "/query/query.rs"));
 }
 
-pub use self::fun::Activation;
+pub use self::fun::{Activation, static_analysis};
 pub use self::grammar::Token;
 pub use self::value::{EvalResult, Value};
 
 use dump::CoreDump;
-use self::fun::label_exprs;
 use self::grammar::QueryParser;
 use self::run::plan_expr;
 use std::fmt;
@@ -59,10 +58,8 @@ impl<'a> Context<'a> {
 
 pub fn compile(query_text: &str) -> Result<Box<Plan>, StaticError> {
     let mut expr = QueryParser::new().parse(&query_text)?;
-    label_exprs(&mut expr);
-    eprintln!("labeled expr: {:?}", expr);
-    fun::debug_captures(&expr);
-    let plan = plan_expr(&expr);
+    let analysis = static_analysis(&mut expr)?;
+    let plan = plan_expr(&expr, &analysis);
     eprintln!("plan: {:#?}", plan);
     Ok(plan)
 }

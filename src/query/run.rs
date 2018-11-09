@@ -10,6 +10,7 @@ use regex;
 
 use super::ast::{Expr, Predicate, PredicateOp, Var};
 use super::breadth_first::{BreadthFirst, Step};
+use super::fun::{StaticAnalysis, plan_lexical, plan_activation, plan_lambda};
 use super::Activation;
 use super::Context;
 use super::value::{self, EvalResult, Stream, TryUnwrap, Value};
@@ -21,52 +22,56 @@ use std::iter::once;
 use std::rc::Rc;
 
 /// Given the expression `expr`, return a `Plan` that will evaluate it.
-pub fn plan_expr(expr: &Expr) -> Box<Plan> {
+pub fn plan_expr(expr: &Expr, analysis: &StaticAnalysis) -> Box<Plan> {
     match expr {
         Expr::Number(n) => Box::new(Const(*n)),
         Expr::String(s) => Box::new(Const(s.clone())),
         Expr::StreamLiteral(elts) => {
-            Box::new(StreamLiteral(elts.iter().map(|b| plan_expr(b)).collect()))
+            Box::new(StreamLiteral(elts.iter().map(|b| plan_expr(b, analysis)).collect()))
         }
-        Expr::Predicate(stream, op, predicate) => plan_stream(op, stream, predicate),
+        Expr::Predicate(stream, op, predicate) => plan_stream(op, stream, predicate, analysis),
 
-        Expr::Var(var) => plan_var(var),
-        Expr::Lambda { .. } => unimplemented!("Expr::Lambda"),
-        Expr::App { arg, fun } => plan_app(arg, fun),
+        Expr::Var(var) => plan_var(var, analysis),
+        Expr::Lambda { id, formals, body } => plan_lambda(*id, formals, body, analysis),
+        Expr::App { arg, fun } => plan_app(arg, fun, analysis),
     }
 }
 
-fn plan_var(var: &Var) -> Box<Plan> {
+fn plan_var(var: &Var, analysis: &StaticAnalysis) -> Box<Plan> {
     match var {
         Var::Root => Box::new(Root),
         Var::Nodes => Box::new(Nodes),
+        Var::Lexical { id, name } => plan_lexical(*id, name, analysis),
         _ => unimplemented!("plan_var"),
     }
 }
 
-fn plan_app(arg: &Expr, fun: &Expr) -> Box<Plan> {
-    let arg_plan = plan_expr(arg);
+fn plan_app(arg: &Expr, fun: &Expr, analysis: &StaticAnalysis) -> Box<Plan> {
+    let arg_plan = plan_expr(arg, analysis);
 
     // Handle direct applications of certain built-in functions.
     match fun {
         Expr::Var(Var::Edges) => Box::new(Edges(arg_plan)),
         Expr::Var(Var::First) => Box::new(First(arg_plan)),
         Expr::Var(Var::Paths) => Box::new(Paths(arg_plan)),
-        _ => unimplemented!("plan_app"),
+        _ => {
+            let fun_plan = plan_expr(fun, analysis);
+            plan_activation(arg_plan, fun_plan)
+        }
     }
 }
 
-fn plan_stream(op: &PredicateOp, stream: &Expr, predicate: &Predicate) -> Box<Plan> {
+fn plan_stream(op: &PredicateOp, stream: &Expr, predicate: &Predicate, analysis: &StaticAnalysis) -> Box<Plan> {
     //let stream_plan = plan_expr(stream);
     //let predicate_plan = plan_predicate(predicate);
     match op {
         PredicateOp::Find => unimplemented!("PredicateOp::Find"),
-        PredicateOp::Filter => plan_filter(stream, predicate),
+        PredicateOp::Filter => plan_filter(stream, predicate, analysis),
         PredicateOp::Until => unimplemented!("PredicateOp::Until"),
     }
 }
 
-fn plan_filter(stream: &Expr, predicate: &Predicate) -> Box<Plan> {
+fn plan_filter(stream: &Expr, predicate: &Predicate, analysis: &StaticAnalysis) -> Box<Plan> {
     let stream_plan: Box<Plan>;
     let predicate_plan;
 
@@ -75,16 +80,16 @@ fn plan_filter(stream: &Expr, predicate: &Predicate) -> Box<Plan> {
     match stream {
         Expr::Var(Var::Nodes) => {
             if let Some((id, remainder)) = find_predicate_required_id(predicate) {
-                stream_plan = Box::new(NodesById(plan_expr(id)));
-                predicate_plan = plan_junction::<And>(&remainder);
+                stream_plan = Box::new(NodesById(plan_expr(id, analysis)));
+                predicate_plan = plan_junction::<And>(&remainder, analysis);
             } else {
                 stream_plan = Box::new(Nodes);
-                predicate_plan = plan_predicate(predicate);
+                predicate_plan = plan_predicate(predicate, analysis);
             }
         }
         stream => {
-            stream_plan = plan_expr(stream);
-            predicate_plan = plan_predicate(predicate);
+            stream_plan = plan_expr(stream, analysis);
+            predicate_plan = plan_predicate(predicate, analysis);
         }
     }
 
@@ -126,31 +131,31 @@ impl PlanOrTrivial {
     }
 }
 
-fn plan_predicate(predicate: &Predicate) -> PlanOrTrivial {
+fn plan_predicate(predicate: &Predicate, analysis: &StaticAnalysis) -> PlanOrTrivial {
     use self::PlanOrTrivial::*;
     match predicate {
-        Predicate::Expr(expr) => Plan(Box::new(EqualPredicate(plan_expr(expr)))),
-        Predicate::Field(field_name, sub) => plan_predicate(sub).map_plan(|predicate| {
+        Predicate::Expr(expr) => Plan(Box::new(EqualPredicate(plan_expr(expr, analysis)))),
+        Predicate::Field(field_name, sub) => plan_predicate(sub, analysis).map_plan(|predicate| {
             Box::new(FieldPredicate {
                 field_name: field_name.clone(),
                 predicate,
             })
         }),
-        Predicate::Ends(sub) => plan_predicate(sub).map_plan(|subplan| Box::new(Ends(subplan))),
-        Predicate::Any(sub) => match plan_predicate(sub) {
+        Predicate::Ends(sub) => plan_predicate(sub, analysis).map_plan(|subplan| Box::new(Ends(subplan))),
+        Predicate::Any(sub) => match plan_predicate(sub, analysis) {
             PlanOrTrivial::Plan(p) => Plan(Box::new(Any(p))),
             PlanOrTrivial::Trivial(false) => Trivial(false),
             PlanOrTrivial::Trivial(true) => Plan(Box::new(NonEmpty)),
         },
-        Predicate::All(sub) => match plan_predicate(sub) {
+        Predicate::All(sub) => match plan_predicate(sub, analysis) {
             PlanOrTrivial::Plan(p) => Plan(Box::new(All(p))),
             PlanOrTrivial::Trivial(true) => Trivial(true),
             PlanOrTrivial::Trivial(false) => Plan(Box::new(Empty)),
         },
         Predicate::Regex(regex) => Plan(Box::new(Regex((&**regex).clone()))),
-        Predicate::And(predicates) => plan_junction::<And>(predicates),
-        Predicate::Or(predicates) => plan_junction::<Or>(predicates),
-        Predicate::Not(predicate) => match plan_predicate(predicate) {
+        Predicate::And(predicates) => plan_junction::<And>(predicates, analysis),
+        Predicate::Or(predicates) => plan_junction::<Or>(predicates, analysis),
+        Predicate::Not(predicate) => match plan_predicate(predicate, analysis) {
             Trivial(k) => Trivial(!k),
             Plan(p) => Plan(Box::new(Not(p))),
         },
@@ -489,9 +494,9 @@ impl BlahJunction for Or {
 }
 
 /// Plan a `BlahJunction` predicate with the given `subterms`.
-fn plan_junction<J: BlahJunction>(subterms: &[Predicate]) -> PlanOrTrivial {
+fn plan_junction<J: BlahJunction>(subterms: &[Predicate], analysis: &StaticAnalysis) -> PlanOrTrivial {
     let mut plans = Vec::new();
-    for pot in subterms.iter().map(plan_predicate) {
+    for pot in subterms.iter().map(|subterm| plan_predicate(subterm, analysis)) {
         match pot {
             PlanOrTrivial::Plan(plan) => {
                 plans.push(plan);

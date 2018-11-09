@@ -1,7 +1,8 @@
 use id_vec::IdVec;
 use super::{Context, EvalResult, Plan, StaticError, Value};
 use super::ast::{Expr, LambdaId, UseId, Var};
-use super::value::Callable;
+use super::run::plan_expr;
+use super::value::{Callable, Error, Function};
 use super::walkers::{ExprWalker, ExprWalkerMut};
 
 use std::collections::{HashMap, HashSet};
@@ -22,6 +23,16 @@ pub struct Activation<'act, 'dump> {
     /// The actual parameters passed to this closure by the call. For
     /// evaluation, this is an empty slice.
     actuals: &'act [Value<'dump>],
+}
+
+/// Places a variable's value might live in an `Activation`.
+#[derive(Clone, Copy)]
+enum VarLocation {
+    /// The value of the parameter with the given index.
+    Actual(usize),
+
+    /// The value at the given index in the current closure's `captured` vector.
+    Captured(usize),
 }
 
 /// A `Function` created by evaluating a lambda expression.
@@ -48,12 +59,32 @@ struct LambdaExpr {
 
     /// An evaluation plan for the body of the closure.
     body: Box<Plan>,
+
+    /// Locations in Activations for our lexical context whose values our
+    /// `Closure`s should capture.
+    captured: Vec<VarLocation>,
 }
 
 impl<'a, 'd> Activation<'a, 'd> {
     /// Create an activation suitable for an eval.
     pub fn for_eval() -> Activation<'a, 'd> {
         unimplemented!()
+    }
+
+    fn get(&self, loc: &VarLocation) -> Value<'d> {
+        match loc {
+            VarLocation::Actual(i) => self.actuals[*i].clone(),
+            VarLocation::Captured(i) => self.closure.captured[*i].clone(),
+        }
+    }
+}
+
+impl fmt::Debug for VarLocation {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        match self {
+            VarLocation::Actual(i) => write!(fmt, "arg #{}", i),
+            VarLocation::Captured(i) => write!(fmt, "cap #{}", i),
+        }
     }
 }
 
@@ -142,8 +173,8 @@ impl ExprLabeler {
 }
 
 impl<'e> ExprWalkerMut<'e> for ExprLabeler {
-    type Error = ();
-    fn visit_expr(&mut self, expr: &'e mut Expr) -> Result<(), ()> {
+    type Error = StaticError;
+    fn visit_expr(&mut self, expr: &'e mut Expr) -> Result<(), StaticError> {
         match expr {
             Expr::Lambda { id, .. } => {
                 *id = self.next_lambda();
@@ -155,10 +186,6 @@ impl<'e> ExprWalkerMut<'e> for ExprLabeler {
         }
         self.visit_expr_children(expr)
     }
-}
-
-pub fn label_exprs(expr: &mut Expr) {
-    ExprLabeler::new().visit_expr(expr).unwrap();
 }
 
 /// An identifier for a lexical variable.
@@ -321,25 +348,6 @@ impl<'expr> ExprWalker<'expr> for CaptureMapBuilder<'expr> {
     }
 }
 
-/// Places a variable's value might live in an `Activation`.
-#[derive(Clone, Copy)]
-enum VarLocation {
-    /// The value of the parameter with the given index.
-    Argument(usize),
-
-    /// The value at the given index in the current closure's `captured` vector.
-    Captured(usize),
-}
-
-impl fmt::Debug for VarLocation {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        match self {
-            VarLocation::Argument(i) => write!(fmt, "arg #{}", i),
-            VarLocation::Captured(i) => write!(fmt, "cap #{}", i),
-        }
-    }
-}
-
 /// For a given lambda, where to find the values of captured variables and
 /// actual parameters it uses.
 #[derive(Debug, Default)]
@@ -383,7 +391,7 @@ impl ClosureLayouts {
             // Our formals are available directly from the Activation.
             for index in 0..arity {
                 let formal = VarAddr { lambda, index };
-                layout.locations.insert(formal, VarLocation::Argument(index));
+                layout.locations.insert(formal, VarLocation::Actual(index));
             }
 
             // Variables bound in outer lambdas must be captured when this
@@ -430,15 +438,79 @@ impl ClosureLayouts {
     }
 }
 
-pub fn debug_captures(expr: &Expr) {
-    let mut builder = CaptureMapBuilder::new();
-    builder.visit_expr(expr).expect("error mapping captures");
-    let map = builder.build();
+/// Statically determined information needed for planning.
+pub struct StaticAnalysis(ClosureLayouts);
+
+pub fn static_analysis(expr: &mut Expr) -> Result<StaticAnalysis, StaticError> {
+    // Label lambdas, variable uses, etc.
+    ExprLabeler::new().visit_expr(expr)?;
+    eprintln!("labeled expr: {:?}", expr);
+
+    // Build a map of which variables are captured by which lambdas.
+    let map = {
+        let mut builder = CaptureMapBuilder::new();
+        builder.visit_expr(expr)?;
+        builder.build()
+    };
     eprintln!("{:#?}", map);
 
+    // Chose how each lambda's closure should be laid out, and then note the
+    // location each variable reference now refers to.
     let layouts = ClosureLayouts::from_capture_map(map);
-    eprintln!("{:#?}", layouts);
+    Ok(StaticAnalysis(layouts))
 }
+
+pub fn plan_lexical(id: UseId, _name: &str, analysis: &StaticAnalysis) -> Box<Plan> {
+    match analysis.0.referents[id] {
+        VarLocation::Actual(i) => Box::new(Actual(i)),
+        VarLocation::Captured(i) => Box::new(Captured(i)),
+    }
+}
+
+#[derive(Debug)]
+struct LambdaExprPlan(Rc<LambdaExpr>);
+
+pub fn plan_lambda(id: LambdaId, formals: &[String], body: &Expr, analysis: &StaticAnalysis) -> Box<Plan> {
+    let lambda = LambdaExpr {
+        name: format!("anonymous {:?}", id),
+        arity: formals.len(),
+        body: plan_expr(body, analysis),
+        captured: analysis.0.lambdas[id].captured.clone(),
+    };
+    Box::new(LambdaExprPlan(Rc::new(lambda)))
+}
+
+impl Plan for LambdaExprPlan {
+    fn run<'a, 'd>(&self, act: &'a Activation<'a, 'd>, _cx: &Context<'d>) -> EvalResult<'d> {
+        Ok(Value::Function(Function(Rc::new(Closure {
+            lambda: self.0.clone(),
+            captured: self.0.captured.iter().map(|loc| act.get(loc)).collect()
+        }))))
+    }
+}
+
+#[derive(Debug)]
+struct Call {
+    arg: Box<Plan>,
+    fun: Box<Plan>
+}
+
+pub fn plan_activation(arg: Box<Plan>, fun: Box<Plan>) -> Box<Plan> {
+    Box::new(Call { arg, fun })
+}
+
+impl Plan for Call {
+    fn run<'a, 'd>(&self, act: &'a Activation<'a, 'd>, cx: &Context<'d>) -> EvalResult<'d> {
+        let args = [self.arg.run(act, cx)?];
+        let fun = match self.fun.run(act, cx)? {
+            Value::Function(f) => f,
+            _ => { return Err(Error::NotAFunction); }
+        };
+
+        fun.call(&args, cx)
+    }
+}
+
 
 #[derive(Debug)]
 struct Crash(&'static str);

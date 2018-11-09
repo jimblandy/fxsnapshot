@@ -27,6 +27,8 @@ Git is the backtrace; this is the continuation.
 - [ ] % give up on 'organizing' the uses into extern, std, and intra-crate, just
       sort them
 - [ ] %% Make `IdVec` iteration produce (index, value) pairs
+- [ ] %% Collect more function arguments in a single step, so we don't build PartialApps all the time
+- [ ] %% <Call as Plan>::run and Function::call force duplicated NotAFunction error handling.
 - [ ] %% use interned atoms for identifiers, instead of strings (crate string_cache?)
 - [ ] %% Change `TryUnwrap` to `FromValue`? so you'd write `Stream<'a>::from_value`?
       Could this clean up the `let stream ...; let stream ...;` ugliness?
@@ -38,6 +40,7 @@ Git is the backtrace; this is the continuation.
       clearly separate the values that can be shared (the Fns) from the things
       that are modified destructively when values are drawn from them (the
       FallibleIterators).
+- [ ] %% Separate planning code, Plan implementations by category? Predicate, Expr, Fun?
 - [ ] %%% bring internal documentation back to life
 - [ ] %%% finish fallible-iterator
 - [ ] %%% can we specialize some plans to the value types they produce?
