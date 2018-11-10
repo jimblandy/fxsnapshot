@@ -13,7 +13,7 @@ mod grammar {
     include!(concat!(env!("OUT_DIR"), "/query/query.rs"));
 }
 
-pub use self::fun::{Activation, static_analysis};
+pub use self::fun::{Activation, ActivationBase, static_analysis};
 pub use self::grammar::Token;
 pub use self::value::{EvalResult, Value};
 

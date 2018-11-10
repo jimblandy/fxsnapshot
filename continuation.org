@@ -5,18 +5,6 @@ Git is the backtrace; this is the continuation.
 %%% = 1-5 days
 %%%% = big
 
-* closure
-- [ ] typing the run-time environment:
-  - [ ] `Plan` generic over environment type passed to `Run`
-  - [ ] types implement `Plan` conditionally on the environment giving them what
-        they need: CoreDump access, lexical access
-- [ ] CaptureMap::lambdas needs to be a Vec, with each lambda guaranteed to
-      appear before all lambdas it encloses.
-- [ ] CaptureMap::lambdas needs to record the parent lambda id, as well.
-- [ ] Build ClosureLayouts from from CaptureMap.
-- [ ] Thread an environment type through all planning functions
-- [ ] Plan lambda, app, var as directed by ClosureLayouts
-
 * internal cleanups
 - [ ] % Could the lifetimes on Plan and PredicatePlan be simplified?
 - [ ] % Rename `Plan` to `ExprPlan`, for symmetry with `PredicatePlan`.
@@ -27,7 +15,6 @@ Git is the backtrace; this is the continuation.
 - [ ] % give up on 'organizing' the uses into extern, std, and intra-crate, just
       sort them
 - [ ] %% Make `IdVec` iteration produce (index, value) pairs
-- [ ] %% Collect more function arguments in a single step, so we don't build PartialApps all the time
 - [ ] %% <Call as Plan>::run and Function::call force duplicated NotAFunction error handling.
 - [ ] %% use interned atoms for identifiers, instead of strings (crate string_cache?)
 - [ ] %% Change `TryUnwrap` to `FromValue`? so you'd write `Stream<'a>::from_value`?
@@ -57,7 +44,6 @@ Git is the backtrace; this is the continuation.
 - [ ] %% How to turn a list of edges into a list of the nodes referred to? (map?)
 - [ ] %% tail recursion, by adding a trampoline variant to the
       `ClonableCallable::call` return type
-- [ ] %%% closures
 - [ ] %%% should paths be their own type? might be nice
 - [ ] %%% nicknames for nodes/edges
 - [ ] %%% save previous results for use in future queries, `Out[1] = ...`
@@ -70,6 +56,7 @@ Git is the backtrace; this is the continuation.
   - [ ] %%%% homogeneous streams
 
 * performance
+- [ ] %% accumulate and pass arguments in chunks, not one by one
 - [ ] %% put expensive streams on their own threads
 - [ ] %%% Could some Streams be double-ended? HashMap::Iter isn't double-ended,
       so iterating over nodes couldn't be, unless we were using a sorted id

@@ -12,29 +12,6 @@ use std::iter::FromIterator;
 use std::mem::replace;
 use std::rc::Rc;
 
-/// Data for a function activation. The details are private to the function
-/// machinery; they are created by function calls, and used by argument
-/// references.
-pub struct Activation<'act, 'dump> {
-    /// The closure we are currently executing. For evaluation, this points to a
-    /// dummy `Closure`.
-    closure: &'act Closure<'dump>,
-
-    /// The actual parameters passed to this closure by the call. For
-    /// evaluation, this is an empty slice.
-    actuals: &'act [Value<'dump>],
-}
-
-/// Places a variable's value might live in an `Activation`.
-#[derive(Clone, Copy)]
-enum VarLocation {
-    /// The value of the parameter with the given index.
-    Actual(usize),
-
-    /// The value at the given index in the current closure's `captured` vector.
-    Captured(usize),
-}
-
 /// A `Function` created by evaluating a lambda expression.
 #[derive(Clone)]
 struct Closure<'a> {
@@ -60,15 +37,53 @@ struct LambdaExpr {
     /// An evaluation plan for the body of the closure.
     body: Box<Plan>,
 
-    /// Locations in Activations for our lexical context whose values our
-    /// `Closure`s should capture.
+    /// How to populate the `captured` vector of a `Closure` created for this
+    /// `LambdaExpr`. In this vector, `captured[i]` is the location at which the
+    /// value that belongs in `Closure::captured[i]` can be found in the
+    /// `Activation` for the lexical context surrounding this lambda expression.
     captured: Vec<VarLocation>,
+}
+
+/// Data for a closure's activation. The details of this struct are private to
+/// the function machinery: they are created by `Call` plans applying closures
+/// created by `LambdaExprPlan`s, and consulted by `Actual` and `Captured` plans
+/// to fetch variables' values.
+pub struct Activation<'act, 'dump> {
+    /// The closure we are currently executing. For evaluation, this points to a
+    /// dummy `Closure`.
+    closure: &'act Closure<'dump>,
+
+    /// The actual parameters passed to this closure by the call. For
+    /// evaluation, this is an empty slice.
+    actuals: &'act [Value<'dump>],
+}
+
+/// Places a variable's value might live in an `Activation`.
+#[derive(Clone, Copy)]
+enum VarLocation {
+    /// The value of the parameter with the given index.
+    Actual(usize),
+
+    /// The value at the given index in the current closure's `captured` vector.
+    Captured(usize),
+}
+
+impl fmt::Debug for VarLocation {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        match self {
+            VarLocation::Actual(i) => write!(fmt, "arg #{}", i),
+            VarLocation::Captured(i) => write!(fmt, "cap #{}", i),
+        }
+    }
 }
 
 impl<'a, 'd> Activation<'a, 'd> {
     /// Create an activation suitable for an eval.
-    pub fn for_eval() -> Activation<'a, 'd> {
-        unimplemented!()
+    pub fn for_eval(base: &'a ActivationBase<'d>) -> Activation<'a, 'd> {
+        Activation {
+            closure: &base.closure,
+            actuals: &[],
+        }
     }
 
     fn get(&self, loc: &VarLocation) -> Value<'d> {
@@ -79,12 +94,32 @@ impl<'a, 'd> Activation<'a, 'd> {
     }
 }
 
-impl fmt::Debug for VarLocation {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        match self {
-            VarLocation::Actual(i) => write!(fmt, "arg #{}", i),
-            VarLocation::Captured(i) => write!(fmt, "cap #{}", i),
-        }
+#[derive(Debug)]
+struct Crash(&'static str);
+impl Plan for Crash {
+    fn run<'a, 'd>(&self, _act: &'a Activation<'a, 'd>, _cx: &Context<'d>) -> EvalResult<'d> {
+        panic!("{}", self.0);
+    }
+}
+
+pub struct ActivationBase<'dump> {
+    closure: Closure<'dump>
+}
+
+impl<'dump> ActivationBase<'dump> {
+    pub fn from_context(_cx: &Context<'dump>) -> ActivationBase<'dump> {
+        let body = Box::new(Crash("dummy ActivationBase closure should never be called"));
+        let lambda = LambdaExpr {
+            name: "dummy ActivationBase closure".to_string(),
+            arity: 0,
+            body,
+            captured: vec![],
+        };
+        let closure = Closure {
+            lambda: Rc::new(lambda),
+            captured: vec![],
+        };
+        ActivationBase { closure }
     }
 }
 
@@ -108,24 +143,6 @@ impl<'dump> Callable<'dump> for Closure<'dump> {
 
     fn name(&self) -> Cow<str> {
         Cow::Borrowed(&self.lambda.name)
-    }
-}
-
-/// A use of a captured variable's value.
-#[derive(Debug)]
-struct Captured(usize);
-impl Plan for Captured {
-    fn run<'a, 'd>(&self, act: &'a Activation<'a, 'd>, _cx: &Context<'d>) -> EvalResult<'d> {
-        Ok(act.closure.captured[self.0].clone())
-    }
-}
-
-/// A use of an argument passed to the closure.
-#[derive(Debug)]
-struct Actual(usize);
-impl Plan for Actual {
-    fn run<'a, 'd>(&self, act: &'a Activation<'a, 'd>, _cx: &Context<'d>) -> EvalResult<'d> {
-        Ok(act.actuals[self.0].clone())
     }
 }
 
@@ -460,6 +477,24 @@ pub fn static_analysis(expr: &mut Expr) -> Result<StaticAnalysis, StaticError> {
     Ok(StaticAnalysis(layouts))
 }
 
+/// A use of a captured variable's value.
+#[derive(Debug)]
+struct Captured(usize);
+impl Plan for Captured {
+    fn run<'a, 'd>(&self, act: &'a Activation<'a, 'd>, _cx: &Context<'d>) -> EvalResult<'d> {
+        Ok(act.closure.captured[self.0].clone())
+    }
+}
+
+/// A use of an argument passed to the closure.
+#[derive(Debug)]
+struct Actual(usize);
+impl Plan for Actual {
+    fn run<'a, 'd>(&self, act: &'a Activation<'a, 'd>, _cx: &Context<'d>) -> EvalResult<'d> {
+        Ok(act.actuals[self.0].clone())
+    }
+}
+
 pub fn plan_lexical(id: UseId, _name: &str, analysis: &StaticAnalysis) -> Box<Plan> {
     match analysis.0.referents[id] {
         VarLocation::Actual(i) => Box::new(Actual(i)),
@@ -511,14 +546,6 @@ impl Plan for Call {
     }
 }
 
-
-#[derive(Debug)]
-struct Crash(&'static str);
-impl Plan for Crash {
-    fn run<'a, 'd>(&self, _act: &'a Activation<'a, 'd>, _cx: &Context<'d>) -> EvalResult<'d> {
-        panic!("{}", self.0);
-    }
-}
 
 #[cfg(test)]
 mod test {

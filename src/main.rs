@@ -49,9 +49,12 @@ fn run() -> Result<(), Error> {
 
     // Run the query, and print the result to stdout.
     let context = query::Context::from_dump(&dump);
-    let activation = query::Activation::for_eval();
+    let activation_base = query::ActivationBase::from_context(&context);
+    let activation = query::Activation::for_eval(&activation_base);
+    let result = query.run(&activation, &context)?;
+
     let stdout = std::io::stdout();
-    query.run(&activation, &context)?.top_write(&mut stdout.lock())?;
+    result .top_write(&mut stdout.lock())?;
     println!();
 
     Ok(())
