@@ -312,8 +312,8 @@ impl<'dump> Callable<'dump> for PartialApp<'dump> {
     fn call_exact_arity(&self, actuals: &[Value<'dump>], cx: &Context<'dump>)
                         -> EvalResult<'dump>
     {
-        let mut exact = self.actuals.clone();
-        exact.extend_from_slice(actuals);
+        let mut exact = actuals.to_owned();
+        exact.extend_from_slice(&self.actuals);
         assert_eq!(exact.len(), self.function.0.arity());
         self.function.0.call_exact_arity(&exact, cx)
     }
