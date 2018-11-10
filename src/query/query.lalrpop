@@ -45,10 +45,17 @@ Suffix: Builder = {
     <PrimaryExpr<"">> => Box::new(move |lhs| Box::new(Expr::App { arg: lhs, fun: <> })),
 
     <op: PredicateOp> <predicate: Predicate> =>
-        Box::new(move |lhs| Box::new(Expr::Predicate(lhs, op, Box::new(predicate)))),
+        Box::new(move |stream| Box::new(Expr::PredicateOp {
+            stream,
+            op,
+            predicate: Box::new(predicate)
+        })),
     "{" <predicates: Comma<Predicate>> "}" =>
-        Box::new(move |lhs| Box::new(Expr::Predicate(lhs, PredicateOp::Filter,
-                                                     Box::new(Predicate::And(predicates))))),
+        Box::new(move |stream| Box::new(Expr::PredicateOp {
+            stream,
+            op: PredicateOp::Filter,
+            predicate: Box::new(Predicate::And(predicates))
+        })),
 }
 
 PrimaryExpr<P>: Box<Expr> = {

@@ -11,7 +11,11 @@ pub enum Expr {
     String(String),
     StreamLiteral(Vec<Box<Expr>>),
 
-    Predicate(Box<Expr>, PredicateOp, Box<Predicate>),
+    PredicateOp {
+        stream: Box<Expr>,
+        op: PredicateOp,
+        predicate: Box<Predicate>
+    },
 
     Var(Var),
     App {

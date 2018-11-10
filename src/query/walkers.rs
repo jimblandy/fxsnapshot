@@ -32,8 +32,8 @@ macro_rules! define_walker_trait {
                         }
                     }
 
-                    Expr::Predicate(expr, _, predicate) => {
-                        self.visit_expr(expr)?;
+                    Expr::PredicateOp { stream, predicate, .. } => {
+                        self.visit_expr(stream)?;
                         self.visit_predicate(predicate)?;
                     }
 

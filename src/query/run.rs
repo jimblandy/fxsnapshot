@@ -29,7 +29,7 @@ pub fn plan_expr(expr: &Expr, analysis: &StaticAnalysis) -> Box<Plan> {
         Expr::StreamLiteral(elts) => {
             Box::new(StreamLiteral(elts.iter().map(|b| plan_expr(b, analysis)).collect()))
         }
-        Expr::Predicate(stream, op, predicate) => plan_stream(op, stream, predicate, analysis),
+        Expr::PredicateOp { stream, op, predicate } => plan_stream(op, stream, predicate, analysis),
 
         Expr::Var(var) => plan_var(var, analysis),
         Expr::Lambda { id, formals, body } => plan_lambda(*id, formals, body, analysis),
