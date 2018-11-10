@@ -311,56 +311,64 @@ impl<'expr> ExprWalker<'expr> for CaptureMapBuilder<'expr> {
                 }
                 Ok(())
             }
-            &Expr::Lambda {
-                id, ref formals, ..
-            } => {
-                let arity = formals.len();
-
-                // Since `self.map.lambdas` is an `IdVec`, it must be built in
-                // order of increasing id, so parents must come before children.
-                // We need to create the entry for this lambda before we visit
-                // its children. We can fill in the captured set afterwards.
-                self.map.lambdas.push_at(id, LambdaInfo {
-                    arity,
-                    parent: enclosing,
-                    captured: Default::default()
-                });
-
-                // When we recurse, we want to find the set of captured
-                // variables for this lambda alone. Create a fresh `HashSet`,
-                // and drop it in as our `captured` while we walk this lambda's
-                // body. We'll union its contents into our enclosing lambda's
-                // captured set when we're done.
-                let parent_captured = replace(&mut self.captured, HashSet::new());
-
-                // Add this lambda's formals to the current list of scopes,
-                // so references in the lambda's body can see them.
-                self.scopes.push((id, formals));
-
-                // Process the body of this lambda.
-                self.visit_expr_children(expr)?;
-
-                // Pop our formals off the list of scopes.
-                self.scopes.pop();
-
-                // References to this lambda's formals within its body are not
-                // 'captured', so drop them.
-                self.captured.retain(|addr| addr.lambda != id);
-
-                // Take out our captured set, and put the parent's back in place.
-                let captured = replace(&mut self.captured, parent_captured);
-
-                // Include this lambda's captured variables in the parent's set.
-                self.captured.extend(&captured);
-
-                // Record this lambda's captured set.
-                self.map.lambdas[id].captured = captured;
-
-                // kthx
-                Ok(())
-            }
+            &Expr::Lambda { id, ref formals, .. } => self.capturing_expr(expr, id, formals, enclosing),
             other => self.visit_expr_children(other),
         }
+    }
+}
+
+impl<'expr> CaptureMapBuilder<'expr> {
+    fn capturing_expr(&mut self,
+                      expr: &'expr Expr,
+                      id: LambdaId,
+                      formals: &'expr Vec<String>,
+                      enclosing: Option<LambdaId>)
+                      -> Result<(), StaticError>
+    {
+        let arity = formals.len();
+
+        // Since `self.map.lambdas` is an `IdVec`, it must be built in
+        // order of increasing id, so parents must come before children.
+        // We need to create the entry for this lambda before we visit
+        // its children. We can fill in the captured set afterwards.
+        self.map.lambdas.push_at(id, LambdaInfo {
+            arity,
+            parent: enclosing,
+            captured: Default::default()
+        });
+
+        // When we recurse, we want to find the set of captured
+        // variables for this lambda alone. Create a fresh `HashSet`,
+        // and drop it in as our `captured` while we walk this lambda's
+        // body. We'll union its contents into our enclosing lambda's
+        // captured set when we're done.
+        let parent_captured = replace(&mut self.captured, HashSet::new());
+
+        // Add this lambda's formals to the current list of scopes,
+        // so references in the lambda's body can see them.
+        self.scopes.push((id, formals));
+
+        // Process the body of this lambda.
+        self.visit_expr_children(expr)?;
+
+        // Pop our formals off the list of scopes.
+        self.scopes.pop();
+
+        // References to this lambda's formals within its body are not
+        // 'captured', so drop them.
+        self.captured.retain(|addr| addr.lambda != id);
+
+        // Take out our captured set, and put the parent's back in place.
+        let captured = replace(&mut self.captured, parent_captured);
+
+        // Include this lambda's captured variables in the parent's set.
+        self.captured.extend(&captured);
+
+        // Record this lambda's captured set.
+        self.map.lambdas[id].captured = captured;
+
+        // kthx
+        Ok(())
     }
 }
 
