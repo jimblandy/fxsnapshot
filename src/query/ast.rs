@@ -25,28 +25,6 @@ pub enum Expr {
     },
 }
 
-#[derive(Clone, Copy, Eq, Ord, PartialEq, PartialOrd, Hash)]
-pub struct LambdaId(pub usize);
-
-impl_id_vec_index!(LambdaId);
-
-impl fmt::Debug for LambdaId {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(fmt, "λ{:?}", self.0)
-    }
-}
-
-#[derive(Clone, Copy, Eq, Ord, PartialEq, PartialOrd, Hash)]
-pub struct UseId(pub usize);
-
-impl_id_vec_index!(UseId);
-
-impl fmt::Debug for UseId {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(fmt, "↑{:?}", self.0)
-    }
-}
-
 #[derive(Clone, Eq, PartialEq)]
 pub enum Var {
     // Special names of built-in operators. For now, these are reserved words,
@@ -59,22 +37,6 @@ pub enum Var {
 
     // Reference to a global or local variable.
     Lexical { id: UseId, name: String },
-}
-
-impl fmt::Debug for Var {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        let simple = match self {
-            Var::Edges => "edges",
-            Var::First => "first",
-            Var::Nodes => "nodes",
-            Var::Paths => "paths",
-            Var::Root => "root",
-            Var::Lexical { id, name } => {
-                return write!(fmt, "{:?}:{:?})", id, name);
-            }
-        };
-        fmt.write_str(simple)
-    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -95,6 +57,44 @@ pub enum Predicate {
     And(Vec<Predicate>),
     Or(Vec<Predicate>),
     Not(Box<Predicate>),
+}
+
+#[derive(Clone, Copy, Eq, Ord, PartialEq, PartialOrd, Hash)]
+pub struct LambdaId(pub usize);
+
+#[derive(Clone, Copy, Eq, Ord, PartialEq, PartialOrd, Hash)]
+pub struct UseId(pub usize);
+
+impl_id_vec_index!(LambdaId);
+
+impl fmt::Debug for LambdaId {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(fmt, "λ{:?}", self.0)
+    }
+}
+
+impl_id_vec_index!(UseId);
+
+impl fmt::Debug for UseId {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(fmt, "↑{:?}", self.0)
+    }
+}
+
+impl fmt::Debug for Var {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        let simple = match self {
+            Var::Edges => "edges",
+            Var::First => "first",
+            Var::Nodes => "nodes",
+            Var::Paths => "paths",
+            Var::Root => "root",
+            Var::Lexical { id, name } => {
+                return write!(fmt, "{:?}:{:?})", id, name);
+            }
+        };
+        fmt.write_str(simple)
+    }
 }
 
 impl PartialEq for Predicate {
