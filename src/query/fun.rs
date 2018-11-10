@@ -129,10 +129,9 @@ impl<'dump> Callable<'dump> for Closure<'dump> {
     {
         // Create a fresh activation to evaluate the body in, providing the
         // closure we're calling and the actual parameters it was passed.
-        let actuals = actuals.to_owned();
         let activation = Activation {
             closure: self,
-            actuals: &actuals,
+            actuals,
         };
         self.lambda.body.run(&activation, cx)
     }
