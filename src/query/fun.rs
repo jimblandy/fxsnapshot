@@ -259,7 +259,7 @@ struct CaptureMapBuilder<'expr> {
 
     /// The parameter lists of the lambdas currently in scope at this point in
     /// the traversal. Outer lambdas appear before inner lambdas.
-    scopes: Vec<(LambdaId, &'expr Vec<String>)>,
+    scopes: Vec<(LambdaId, &'expr [String])>,
 
     /// The set of variables we've seen used so far within the innermost lambda
     /// at this point in the traversal.
@@ -321,7 +321,7 @@ impl<'expr> CaptureMapBuilder<'expr> {
     fn capturing_expr(&mut self,
                       expr: &'expr Expr,
                       id: LambdaId,
-                      formals: &'expr Vec<String>,
+                      formals: &'expr[String],
                       enclosing: Option<LambdaId>)
                       -> Result<(), StaticError>
     {
