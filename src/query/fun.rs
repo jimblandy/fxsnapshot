@@ -49,9 +49,9 @@ struct LambdaExpr {
 /// created by `LambdaExprPlan`s, and consulted by `Actual` and `Captured` plans
 /// to fetch variables' values.
 pub struct Activation<'act, 'dump> {
-    /// The closure we are currently executing. For evaluation, this points to a
-    /// dummy `Closure`.
-    closure: &'act Closure<'dump>,
+    /// Values captured by the closure, filter expression, etc. in whose context
+    /// we are running.
+    captured: &'act [Value<'dump>],
 
     /// The actual parameters passed to this closure by the call. For
     /// evaluation, this is an empty slice.
@@ -79,9 +79,9 @@ impl fmt::Debug for VarLocation {
 
 impl<'a, 'd> Activation<'a, 'd> {
     /// Create an activation suitable for an eval.
-    pub fn for_eval(base: &'a ActivationBase<'d>) -> Activation<'a, 'd> {
+    pub fn for_eval(_base: &'a ActivationBase<'d>) -> Activation<'a, 'd> {
         Activation {
-            closure: &base.closure,
+            captured: &[],
             actuals: &[],
         }
     }
@@ -89,7 +89,7 @@ impl<'a, 'd> Activation<'a, 'd> {
     fn get(&self, loc: &VarLocation) -> Value<'d> {
         match loc {
             VarLocation::Actual(i) => self.actuals[*i].clone(),
-            VarLocation::Captured(i) => self.closure.captured[*i].clone(),
+            VarLocation::Captured(i) => self.captured[*i].clone(),
         }
     }
 }
@@ -130,7 +130,7 @@ impl<'dump> Callable<'dump> for Closure<'dump> {
         // Create a fresh activation to evaluate the body in, providing the
         // closure we're calling and the actual parameters it was passed.
         let activation = Activation {
-            closure: self,
+            captured: &self.captured,
             actuals,
         };
         self.lambda.body.run(&activation, cx)
@@ -491,7 +491,7 @@ pub fn static_analysis(expr: &mut Expr) -> Result<StaticAnalysis, StaticError> {
 struct Captured(usize);
 impl Plan for Captured {
     fn run<'a, 'd>(&self, act: &'a Activation<'a, 'd>, _cx: &Context<'d>) -> EvalResult<'d> {
-        Ok(act.closure.captured[self.0].clone())
+        Ok(act.captured[self.0].clone())
     }
 }
 

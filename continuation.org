@@ -6,6 +6,8 @@ Git is the backtrace; this is the continuation.
 %%%% = big
 
 * internal cleanups
+- [ ] % Delete ActivationBase, now that the simplified Activation no longer
+      requires a Closure
 - [ ] % move `fun.rs` stuff into its own directory, split up file
 - [ ] % Could the lifetimes on Plan and PredicatePlan be simplified?
 - [ ] % Rename `Plan` to `ExprPlan`, for symmetry with `PredicatePlan`.
