@@ -37,11 +37,9 @@ struct LambdaExpr {
     /// An evaluation plan for the body of the closure.
     body: Box<Plan>,
 
-    /// How to populate the `captured` vector of a `Closure` created for this
-    /// `LambdaExpr`. In this vector, `captured[i]` is the location at which the
-    /// value that belongs in `Closure::captured[i]` can be found in the
-    /// `Activation` for the lexical context surrounding this lambda expression.
-    captured: Vec<VarLocation>,
+    /// How to build the `captured` vector of a `Closure` created for this
+    /// `LambdaExpr`.
+    captured: CaptureList,
 }
 
 /// Data for a closure's activation. The details of this struct are private to
@@ -68,6 +66,23 @@ enum VarLocation {
     Captured(usize),
 }
 
+/// How to build a vector of values captured by an expression, like a lambda or
+/// filter expression, given the information available in an `Activation` for
+/// the expression's lexical context.
+///
+/// The `i`'th element says where to find the value that belongs in
+/// `captured[i]`. Note that, since this is describing how to build the closure,
+/// these are the homes those values occupy *outside* the lambda, not the homes
+/// they will have in the closure.
+#[derive(Debug, Default)]
+pub struct CaptureList(Vec<VarLocation>);
+
+impl CaptureList {
+    fn from_layout(layout: &Layout) -> CaptureList {
+        CaptureList(layout.captured.clone())
+    }
+}
+
 impl fmt::Debug for VarLocation {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match self {
@@ -92,6 +107,10 @@ impl<'a, 'd> Activation<'a, 'd> {
             VarLocation::Captured(i) => self.captured[*i].clone(),
         }
     }
+
+    fn get_captured(&self, capture_list: &CaptureList) -> Vec<Value<'d>> {
+        capture_list.0.iter().map(|loc| self.get(loc)).collect()
+    }
 }
 
 #[derive(Debug)]
@@ -113,7 +132,7 @@ impl<'dump> ActivationBase<'dump> {
             name: "dummy ActivationBase closure".to_string(),
             arity: 0,
             body,
-            captured: vec![],
+            captured: CaptureList::default(),
         };
         let closure = Closure {
             lambda: Rc::new(lambda),
@@ -378,13 +397,7 @@ impl<'expr> CaptureMapBuilder<'expr> {
 /// actual parameters it uses.
 #[derive(Debug, Default)]
 struct Layout {
-    /// How to build the `captured` vector of a `Closure` for this lambda, from
-    /// the information available in the lambda's lexical context.
-    ///
-    /// Each `to_capture[i]` says where to find the value that belongs in
-    /// `captured[i]`. Note that, since this is describing how to build the
-    /// closure, these are the homes those values occupy *outside* the lambda,
-    /// not the homes they will have in the closure.
+    /// How to capture this closure's free variables. Used to build `CaptureList`s.
     captured: Vec<VarLocation>,
 
     /// A map from each variable that occurs free in this lambda's body to the
@@ -519,7 +532,7 @@ pub fn plan_lambda(id: LambdaId, formals: &[String], body: &Expr, analysis: &Sta
         name: format!("anonymous {:?}", id),
         arity: formals.len(),
         body: plan_expr(body, analysis),
-        captured: analysis.0.lambdas[id].captured.clone(),
+        captured: CaptureList::from_layout(&analysis.0.lambdas[id]),
     };
     Box::new(LambdaExprPlan(Rc::new(lambda)))
 }
@@ -528,7 +541,7 @@ impl Plan for LambdaExprPlan {
     fn run<'a, 'd>(&self, act: &'a Activation<'a, 'd>, _cx: &Context<'d>) -> EvalResult<'d> {
         Ok(Value::Function(Function(Rc::new(Closure {
             lambda: self.0.clone(),
-            captured: self.0.captured.iter().map(|loc| act.get(loc)).collect()
+            captured: act.get_captured(&self.0.captured)
         }))))
     }
 }
