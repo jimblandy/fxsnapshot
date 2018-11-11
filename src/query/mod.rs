@@ -13,7 +13,7 @@ mod grammar {
     include!(concat!(env!("OUT_DIR"), "/query/query.rs"));
 }
 
-pub use self::fun::{Activation, ActivationBase, static_analysis};
+pub use self::fun::{Activation, ActivationBase, StaticAnalysis};
 pub use self::grammar::Token;
 pub use self::value::{EvalResult, Value};
 
@@ -58,7 +58,7 @@ impl<'a> Context<'a> {
 
 pub fn compile(query_text: &str) -> Result<Box<Plan>, StaticError> {
     let mut expr = QueryParser::new().parse(&query_text)?;
-    let analysis = static_analysis(&mut expr)?;
+    let analysis = StaticAnalysis::from_expr(&mut expr)?;
     let plan = plan_expr(&expr, &analysis);
     eprintln!("plan: {:#?}", plan);
     Ok(plan)

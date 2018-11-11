@@ -480,23 +480,25 @@ impl ClosureLayouts {
 /// Statically determined information needed for planning.
 pub struct StaticAnalysis(ClosureLayouts);
 
-pub fn static_analysis(expr: &mut Expr) -> Result<StaticAnalysis, StaticError> {
-    // Label lambdas, variable uses, etc.
-    ExprLabeler::new().visit_expr(expr)?;
-    eprintln!("labeled expr: {:?}", expr);
+impl StaticAnalysis {
+    pub fn from_expr(expr: &mut Expr) -> Result<StaticAnalysis, StaticError> {
+        // Label lambdas, variable uses, etc.
+        ExprLabeler::new().visit_expr(expr)?;
+        eprintln!("labeled expr: {:?}", expr);
 
-    // Build a map of which variables are captured by which lambdas.
-    let map = {
-        let mut builder = CaptureMapBuilder::new();
-        builder.visit_expr(expr)?;
-        builder.build()
-    };
-    eprintln!("{:#?}", map);
+        // Build a map of which variables are captured by which lambdas.
+        let map = {
+            let mut builder = CaptureMapBuilder::new();
+            builder.visit_expr(expr)?;
+            builder.build()
+        };
+        eprintln!("{:#?}", map);
 
-    // Chose how each lambda's closure should be laid out, and then note the
-    // location each variable reference now refers to.
-    let layouts = ClosureLayouts::from_capture_map(map);
-    Ok(StaticAnalysis(layouts))
+        // Chose how each lambda's closure should be laid out, and then note the
+        // location each variable reference now refers to.
+        let layouts = ClosureLayouts::from_capture_map(map);
+        Ok(StaticAnalysis(layouts))
+    }
 }
 
 /// A use of a captured variable's value.
