@@ -499,6 +499,10 @@ impl StaticAnalysis {
         let layouts = ClosureLayouts::from_capture_map(map);
         Ok(StaticAnalysis(layouts))
     }
+
+    pub fn get_capture_list(&self, id: LambdaId) -> CaptureList {
+        CaptureList::from_layout(&self.0.lambdas[id])
+    }
 }
 
 /// A use of a captured variable's value.
@@ -534,7 +538,7 @@ pub fn plan_lambda(id: LambdaId, formals: &[String], body: &Expr, analysis: &Sta
         name: format!("anonymous {:?}", id),
         arity: formals.len(),
         body: plan_expr(body, analysis),
-        captured: CaptureList::from_layout(&analysis.0.lambdas[id]),
+        captured: analysis.get_capture_list(id),
     };
     Box::new(LambdaExprPlan(Rc::new(lambda)))
 }
