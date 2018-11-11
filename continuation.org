@@ -6,6 +6,7 @@ Git is the backtrace; this is the continuation.
 %%%% = big
 
 * internal cleanups
+- [ ] % move `fun.rs` stuff into its own directory, split up file
 - [ ] % Could the lifetimes on Plan and PredicatePlan be simplified?
 - [ ] % Rename `Plan` to `ExprPlan`, for symmetry with `PredicatePlan`.
 - [ ] % reverse order of arguments to `impl_value_variant`, to more closely
@@ -14,7 +15,8 @@ Git is the backtrace; this is the continuation.
 - [ ] % `Callable` is a stupid lexeme, they're Functions
 - [ ] % give up on 'organizing' the uses into extern, std, and intra-crate, just
       sort them
-- [ ] %% Make `IdVec` iteration produce (index, value) pairs
+- [ ] % actually use ExprLabeler's lambda_count, use_count to size CaptureMap tables
+- [ ] %% Make `IdVec` iteration produce (index, value) pairs, `fmt::Debug` print as map
 - [ ] %% <Call as Plan>::run and Function::call force duplicated NotAFunction error handling.
 - [ ] %% use interned atoms for identifiers, instead of strings (crate string_cache?)
 - [ ] %% Change `TryUnwrap` to `FromValue`? so you'd write `Stream<'a>::from_value`?

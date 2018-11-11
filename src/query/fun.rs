@@ -179,10 +179,12 @@ impl ExprLabeler {
         UseId(next)
     }
 
+    #[allow(dead_code)]
     fn lambda_count(&self) -> usize {
         self.next_lambda
     }
 
+    #[allow(dead_code)]
     fn use_count(&self) -> usize {
         self.next_use
     }
