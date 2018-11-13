@@ -18,6 +18,14 @@ Git is the backtrace; this is the continuation.
 - [ ] % give up on 'organizing' the uses into extern, std, and intra-crate, just
       sort them
 - [ ] % actually use ExprLabeler's lambda_count, use_count to size CaptureMap tables
+- [ ] %% Pull out concept of a 'capturing expression' from fun.rs; lambdas and
+      stream predicate applications are both capturing expressions. LambdaInfo,
+      etc. will need to be renamed.
+- [ ] %% Should Callable not expect a cx? Streams are just boxed
+      FallibleIterators, where the Rust closure captures the `dump` or the `cx`.
+      There's no way to specify the cx to use to produce the next item. If
+      that's acceptable, then it must be acceptable for Callables to do the
+      same.
 - [ ] %% Make `IdVec` iteration produce (index, value) pairs, `fmt::Debug` print as map
 - [ ] %% <Call as Plan>::run and Function::call force duplicated NotAFunction error handling.
 - [ ] %% use interned atoms for identifiers, instead of strings (crate string_cache?)
