@@ -101,6 +101,15 @@ impl<'a, 'd> Activation<'a, 'd> {
         }
     }
 
+    pub fn from_captured(captured: &'a [Value<'d>])
+        -> Activation<'a, 'd>
+    {
+        Activation {
+            captured,
+            actuals: &[],
+        }
+    }
+
     fn get(&self, loc: &VarLocation) -> Value<'d> {
         match loc {
             VarLocation::Actual(i) => self.actuals[*i].clone(),
@@ -108,7 +117,7 @@ impl<'a, 'd> Activation<'a, 'd> {
         }
     }
 
-    fn get_captured(&self, capture_list: &CaptureList) -> Vec<Value<'d>> {
+    pub fn get_captured(&self, capture_list: &CaptureList) -> Vec<Value<'d>> {
         capture_list.0.iter().map(|loc| self.get(loc)).collect()
     }
 }
@@ -213,7 +222,7 @@ impl<'e> WalkerMut<'e> for ExprLabeler {
     type Error = StaticError;
     fn walk_expr(&mut self, expr: &'e mut Expr) -> Result<(), StaticError> {
         match expr {
-            Expr::Lambda { id, .. } => {
+            Expr::Lambda { id, .. } | Expr::PredicateOp { id, .. } => {
                 *id = self.next_lambda();
             }
             Expr::Var(Var::Lexical { id, .. }) => {
@@ -321,9 +330,9 @@ impl<'e> Walker<'e> for CaptureMapBuilder<'e> {
     fn walk_expr(&mut self, expr: &'e Expr) -> Result<(), StaticError> {
         let enclosing = self.scopes.last().map(|(id, _)| *id);
         match expr {
-            &Expr::Var(Var::Lexical { id, ref name }) => {
+            Expr::Var(Var::Lexical { id, ref name }) => {
                 if let Some(referent) = self.find_var(name) {
-                    self.map.uses.push_at(id, UseInfo { lambda: enclosing, referent });
+                    self.map.uses.push_at(*id, UseInfo { lambda: enclosing, referent });
                     self.captured.insert(referent);
                 } else {
                     return Err(StaticError::UnboundVar {
@@ -332,19 +341,33 @@ impl<'e> Walker<'e> for CaptureMapBuilder<'e> {
                 }
                 Ok(())
             }
-            &Expr::Lambda { id, ref formals, .. } => self.capturing_expr(expr, id, formals, enclosing),
+            Expr::Lambda { id, formals, .. } => {
+                self.with_capture(*id, formals, enclosing, |builder| {
+                    expr.walk_children(builder)
+                })
+            }
+            Expr::PredicateOp { id, stream, predicate, .. } => {
+                // The stream falls outside the capture, but the predicate runs
+                // while the stream is being consumed, so it needs to be inside
+                // the capture.
+                self.walk_expr(&stream)?;
+                self.with_capture(*id, &[], enclosing, |builder| {
+                    builder.walk_predicate(&predicate)
+                })
+            }
             other => other.walk_children(self),
         }
     }
 }
 
 impl<'expr> CaptureMapBuilder<'expr> {
-    fn capturing_expr(&mut self,
-                      expr: &'expr Expr,
-                      id: LambdaId,
-                      formals: &'expr[String],
-                      enclosing: Option<LambdaId>)
-                      -> Result<(), StaticError>
+    fn with_capture<F>(&mut self,
+                       id: LambdaId,
+                       formals: &'expr[String],
+                       enclosing: Option<LambdaId>,
+                       body: F)
+                       -> Result<(), StaticError>
+        where F: FnOnce(&mut Self) -> Result<(), StaticError>
     {
         let arity = formals.len();
 
@@ -370,7 +393,7 @@ impl<'expr> CaptureMapBuilder<'expr> {
         self.scopes.push((id, formals));
 
         // Process the body of this lambda.
-        expr.walk_children(self)?;
+        body(self)?;
 
         // Pop our formals off the list of scopes.
         self.scopes.pop();

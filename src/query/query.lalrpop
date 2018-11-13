@@ -46,12 +46,14 @@ Suffix: Builder = {
 
     <op: PredicateOp> <predicate: Predicate> =>
         Box::new(move |stream| Box::new(Expr::PredicateOp {
+            id: LambdaId(0),
             stream,
             op,
             predicate: Box::new(predicate)
         })),
     "{" <predicates: Comma<Predicate>> "}" =>
         Box::new(move |stream| Box::new(Expr::PredicateOp {
+            id: LambdaId(0),
             stream,
             op: PredicateOp::Filter,
             predicate: Box::new(Predicate::And(predicates))

@@ -21,6 +21,12 @@ Git is the backtrace; this is the continuation.
 - [ ] %% Pull out concept of a 'capturing expression' from fun.rs; lambdas and
       stream predicate applications are both capturing expressions. LambdaInfo,
       etc. will need to be renamed.
+- [ ] %% Lots of comments and names in CaptureMap are out of date if there are
+      many sorts of capturing expressions.
+- [ ] %% CaptureMap builder `captured` is a misnomer, because it includes
+      references to formals. It would be better for `walk_expr` not to put
+      formal references in self.captured in the first place, rather than
+      filtering them out in `capturing_expr` on the way out.
 - [ ] %% Should Callable not expect a cx? Streams are just boxed
       FallibleIterators, where the Rust closure captures the `dump` or the `cx`.
       There's no way to specify the cx to use to produce the next item. If

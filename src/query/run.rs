@@ -8,9 +8,9 @@
 use fallible_iterator::{self, FallibleIterator};
 use regex;
 
-use super::ast::{Expr, Predicate, PredicateOp, Var};
+use super::ast::{Expr, LambdaId, Predicate, PredicateOp, Var};
 use super::breadth_first::{BreadthFirst, Step};
-use super::fun::{StaticAnalysis, plan_lexical, plan_activation, plan_lambda};
+use super::fun::{CaptureList, StaticAnalysis, plan_lexical, plan_activation, plan_lambda};
 use super::Activation;
 use super::Context;
 use super::value::{self, EvalResult, Stream, TryUnwrap, Value};
@@ -29,7 +29,7 @@ pub fn plan_expr(expr: &Expr, analysis: &StaticAnalysis) -> Box<Plan> {
         Expr::StreamLiteral(elts) => {
             Box::new(StreamLiteral(elts.iter().map(|b| plan_expr(b, analysis)).collect()))
         }
-        Expr::PredicateOp { stream, op, predicate } => plan_stream(op, stream, predicate, analysis),
+        Expr::PredicateOp { id, stream, op, predicate } => plan_stream(*id, op, stream, predicate, analysis),
 
         Expr::Var(var) => plan_var(var, analysis),
         Expr::Lambda { id, formals, body } => plan_lambda(*id, formals, body, analysis),
@@ -61,17 +61,22 @@ fn plan_app(arg: &Expr, fun: &Expr, analysis: &StaticAnalysis) -> Box<Plan> {
     }
 }
 
-fn plan_stream(op: &PredicateOp, stream: &Expr, predicate: &Predicate, analysis: &StaticAnalysis) -> Box<Plan> {
+fn plan_stream(id: LambdaId,
+               op: &PredicateOp,
+               stream: &Expr,
+               predicate: &Predicate,
+               analysis: &StaticAnalysis)
+               -> Box<Plan> {
     //let stream_plan = plan_expr(stream);
     //let predicate_plan = plan_predicate(predicate);
     match op {
         PredicateOp::Find => unimplemented!("PredicateOp::Find"),
-        PredicateOp::Filter => plan_filter(stream, predicate, analysis),
+        PredicateOp::Filter => plan_filter(id, stream, predicate, analysis),
         PredicateOp::Until => unimplemented!("PredicateOp::Until"),
     }
 }
 
-fn plan_filter(stream: &Expr, predicate: &Predicate, analysis: &StaticAnalysis) -> Box<Plan> {
+fn plan_filter(id: LambdaId, stream: &Expr, predicate: &Predicate, analysis: &StaticAnalysis) -> Box<Plan> {
     let stream_plan: Box<Plan>;
     let predicate_plan;
 
@@ -105,6 +110,7 @@ fn plan_filter(stream: &Expr, predicate: &Predicate, analysis: &StaticAnalysis) 
         // stream.
         PlanOrTrivial::Plan(plan) => Box::new(Filter {
             stream: stream_plan,
+            capture_list: analysis.get_capture_list(id),
             filter: plan.into(),
         }),
     }
@@ -299,11 +305,26 @@ impl Plan for Edges {
 #[derive(Debug)]
 struct Filter {
     stream: Box<Plan>,
+    capture_list: CaptureList,
     filter: Rc<PredicatePlan>,
 }
+
 impl Plan for Filter {
-    fn run<'a, 'd>(&self, _act: &'a Activation<'a, 'd>, _cx: &Context<'d>) -> EvalResult<'d> {
-        unimplemented!("<Filter as Plan>::run")
+    fn run<'a, 'd>(&self, act: &'a Activation<'a, 'd>, cx: &Context<'d>) -> EvalResult<'d> {
+        let value = self.stream.run(act, cx)?;
+        let stream: Stream = value.try_unwrap()?;
+
+        // Gather up owned versions of everything filter's argument needs.
+        let captured = act.get_captured(&self.capture_list);
+        let filter = self.filter.clone();
+        let cx = cx.clone();
+
+        // The `move` closure here takes ownership of all the parts it needs, so
+        // the stream becomes independent of this frame.
+        let iter = stream.filter(move |item| {
+            filter.test(item, &Activation::from_captured(&captured), &cx)
+        });
+        Ok(Value::from(Stream::new(iter)))
     }
 }
 

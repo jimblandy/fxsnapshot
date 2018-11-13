@@ -12,6 +12,7 @@ pub enum Expr {
     StreamLiteral(Vec<Box<Expr>>),
 
     PredicateOp {
+        id: LambdaId,
         stream: Box<Expr>,
         op: PredicateOp,
         predicate: Box<Predicate>
