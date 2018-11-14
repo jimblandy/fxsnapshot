@@ -3,7 +3,7 @@ use super::{Context, EvalResult, Plan, StaticError, Value};
 use super::ast::{Expr, LambdaId, UseId, Var};
 use super::run::plan_expr;
 use super::value::{Callable, Error, Function};
-use super::walkers::{ExprWalker, ExprWalkerMut};
+use super::walkers::{Walkable, Walker, WalkerMut};
 
 use std::collections::{HashMap, HashSet};
 use std::borrow::Cow;
@@ -165,7 +165,7 @@ impl<'dump> Callable<'dump> for Closure<'dump> {
 }
 
 #[derive(Default)]
-/// An `ExprWalkerMut` that assigns a distinct label to each node in the AST
+/// An `WalkerMut` that assigns a distinct label to each node in the AST
 /// that needs one, for the benefit of closure layout.
 ///
 /// This assigns `LambdaId`s and `UseId`s starting at zero, with no gaps. You
@@ -209,9 +209,9 @@ impl ExprLabeler {
     }
 }
 
-impl<'e> ExprWalkerMut<'e> for ExprLabeler {
+impl<'e> WalkerMut<'e> for ExprLabeler {
     type Error = StaticError;
-    fn visit_expr(&mut self, expr: &'e mut Expr) -> Result<(), StaticError> {
+    fn walk_expr(&mut self, expr: &'e mut Expr) -> Result<(), StaticError> {
         match expr {
             Expr::Lambda { id, .. } => {
                 *id = self.next_lambda();
@@ -221,7 +221,7 @@ impl<'e> ExprWalkerMut<'e> for ExprLabeler {
             }
             _ => (),
         }
-        self.visit_expr_children(expr)
+        expr.walk_children_mut(self)
     }
 }
 
@@ -315,10 +315,10 @@ impl<'e> CaptureMapBuilder<'e> {
     }
 }
 
-impl<'expr> ExprWalker<'expr> for CaptureMapBuilder<'expr> {
+impl<'e> Walker<'e> for CaptureMapBuilder<'e> {
     type Error = StaticError;
 
-    fn visit_expr(&mut self, expr: &'expr Expr) -> Result<(), StaticError> {
+    fn walk_expr(&mut self, expr: &'e Expr) -> Result<(), StaticError> {
         let enclosing = self.scopes.last().map(|(id, _)| *id);
         match expr {
             &Expr::Var(Var::Lexical { id, ref name }) => {
@@ -333,7 +333,7 @@ impl<'expr> ExprWalker<'expr> for CaptureMapBuilder<'expr> {
                 Ok(())
             }
             &Expr::Lambda { id, ref formals, .. } => self.capturing_expr(expr, id, formals, enclosing),
-            other => self.visit_expr_children(other),
+            other => other.walk_children(self),
         }
     }
 }
@@ -350,7 +350,7 @@ impl<'expr> CaptureMapBuilder<'expr> {
 
         // Since `self.map.lambdas` is an `IdVec`, it must be built in
         // order of increasing id, so parents must come before children.
-        // We need to create the entry for this lambda before we visit
+        // We need to create the entry for this lambda before we walk
         // its children. We can fill in the captured set afterwards.
         self.map.lambdas.push_at(id, LambdaInfo {
             arity,
@@ -370,7 +370,7 @@ impl<'expr> CaptureMapBuilder<'expr> {
         self.scopes.push((id, formals));
 
         // Process the body of this lambda.
-        self.visit_expr_children(expr)?;
+        expr.walk_children(self)?;
 
         // Pop our formals off the list of scopes.
         self.scopes.pop();
@@ -420,7 +420,7 @@ impl ClosureLayouts {
     fn from_capture_map(cm: CaptureMap) -> ClosureLayouts {
         let mut layouts = ClosureLayouts::default();
 
-        // First, lay out each lambda's closure. Visit parents before children,
+        // First, lay out each lambda's closure. Walk parents before children,
         // so the children can use the parent's layout to find the variables
         // they need to capture.
         for (lambda, LambdaInfo { arity, parent, captured }) in cm.lambdas.into_iter().enumerate() {
@@ -483,13 +483,13 @@ pub struct StaticAnalysis(ClosureLayouts);
 impl StaticAnalysis {
     pub fn from_expr(expr: &mut Expr) -> Result<StaticAnalysis, StaticError> {
         // Label lambdas, variable uses, etc.
-        ExprLabeler::new().visit_expr(expr)?;
+        ExprLabeler::new().walk_expr(expr)?;
         eprintln!("labeled expr: {:?}", expr);
 
         // Build a map of which variables are captured by which lambdas.
         let map = {
             let mut builder = CaptureMapBuilder::new();
-            builder.visit_expr(expr)?;
+            builder.walk_expr(expr)?;
             builder.build()
         };
         eprintln!("{:#?}", map);
@@ -593,7 +593,7 @@ mod test {
 
     fn make_capture_map(expr: &Expr) -> CaptureMap {
         let mut builder = CaptureMapBuilder::new();
-        builder.visit_expr(expr)
+        builder.walk_expr(expr)
             .expect("build capture map");
         builder.build()
     }
