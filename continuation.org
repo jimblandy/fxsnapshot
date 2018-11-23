@@ -6,6 +6,7 @@ Git is the backtrace; this is the continuation.
 %%%% = big
 
 * internal cleanups
+- [ ] % use `dyn Trait` syntax
 - [ ] % Delete ActivationBase, now that the simplified Activation no longer
       requires a Closure
 - [ ] % move `fun.rs` stuff into its own directory, split up file
@@ -18,6 +19,7 @@ Git is the backtrace; this is the continuation.
 - [ ] % give up on 'organizing' the uses into extern, std, and intra-crate, just
       sort them
 - [ ] % actually use ExprLabeler's lambda_count, use_count to size CaptureMap tables
+- [ ] %% update to Rust 2018
 - [ ] %% Pull out concept of a 'capturing expression' from fun.rs; lambdas and
       stream predicate applications are both capturing expressions. LambdaInfo,
       etc. will need to be renamed.
