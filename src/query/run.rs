@@ -13,10 +13,11 @@ use super::breadth_first::{BreadthFirst, Step};
 use super::fun::{CaptureList, StaticAnalysis, plan_lexical, plan_activation, plan_lambda};
 use super::Activation;
 use super::Context;
-use super::value::{self, EvalResult, Stream, TryUnwrap, Value};
+use super::value::{self, Callable, EvalResult, Function, Stream, TryUnwrap, Value};
 use super::{Plan, PredicatePlan};
 use dump::{Edge, Node, NodeId};
 
+use std::borrow::Cow;
 use std::fmt;
 use std::iter::once;
 use std::rc::Rc;
@@ -41,6 +42,7 @@ fn plan_var(var: &Var, analysis: &StaticAnalysis) -> Box<Plan> {
     match var {
         Var::Root => Box::new(Root),
         Var::Nodes => Box::new(Nodes),
+        Var::Map => Box::new(Map),
         Var::Lexical { id, name } => plan_lexical(*id, name, analysis),
         _ => unimplemented!("plan_var"),
     }
@@ -375,6 +377,43 @@ impl Plan for Paths {
         Ok(Value::from(Stream::new(fallible_iterator::convert(
             paths_iter,
         ))))
+    }
+}
+
+#[derive(Debug)]
+struct Map;
+
+// This is a bit weird: we use `Map` for both the plan that returns the function
+// and the primitive `Function` itself.
+impl<'dump> Callable<'dump> for Map {
+    fn call_exact_arity(&self, actuals: &[Value<'dump>], cx: &Context<'dump>)
+                        -> EvalResult<'dump>
+    {
+        assert_eq!(actuals.len(), 2);
+        let stream: &Stream = actuals[0].try_unwrap_ref()?;
+        let fun: &Function = actuals[1].try_unwrap_ref()?;
+
+        // Owned versions of the above, for the closure to capture.
+        let stream = stream.clone();
+        let fun = fun.clone();
+        let cx = cx.clone();
+
+        let iter = stream.map(move |item| fun.call(&[item], &cx));
+        Ok(Value::from(Stream::new(iter)))
+    }
+
+    fn arity(&self) -> usize {
+        2
+    }
+
+    fn name(&self) -> Cow<str> {
+        Cow::Borrowed("map")
+    }
+}
+
+impl Plan for Map {
+    fn run<'a, 'd>(&self, _act: &'a Activation<'a, 'd>, _cx: &Context<'d>) -> EvalResult<'d> {
+        Ok(Value::from(Function::new(Map)))
     }
 }
 

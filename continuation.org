@@ -54,8 +54,7 @@ Git is the backtrace; this is the continuation.
 - [ ] %%% update dependencies to avoid compiling expensive crates multiple times
 
 * language features
-- [ ] %% re-implement filters and stream literals. They need to capture, like lambda.
-- [ ] %% map - followed by Suffix!
+- [ ] %% map, with special syntax
 - [ ] %% distinguish 'shortestPaths', 'allPaths'
 - [ ] %% pathsfrom
 - [ ] %% bug: `paths` assumes core dump edges and id's are all well-formed;

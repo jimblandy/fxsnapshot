@@ -36,6 +36,7 @@ pub enum Var {
     // not globals.
     Edges,
     First,
+    Map,
     Nodes,
     Paths,
     Root,
@@ -91,6 +92,7 @@ impl fmt::Debug for Var {
         let simple = match self {
             Var::Edges => "edges",
             Var::First => "first",
+            Var::Map => "map",
             Var::Nodes => "nodes",
             Var::Paths => "paths",
             Var::Root => "root",

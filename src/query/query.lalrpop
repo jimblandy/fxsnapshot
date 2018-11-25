@@ -81,6 +81,7 @@ PrimaryExpr<P>: Box<Expr> = {
 Var: Var = {
     "edges" => Var::Edges,
     "first" => Var::First,
+    "map" => Var::Map,
     "nodes" => Var::Nodes,
     "paths" => Var::Paths,
     "root" => Var::Root,
