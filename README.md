@@ -66,141 +66,81 @@ Or to find all the closures using a given script:
     $ fxsnapshot chrome.fxsnapshot \
     > 'nodes { JSObjectClassName: "Function" } paths { ends id: 0x7f412ebb2040 } first '
 
-### Query syntax
+### Query language
 
 Things marked 'NYI' are not yet implemented.
 
-Single values:
+The query language includes five types:
 
-- number and string literals - as usual
+- integers, strings, booleans: as usual
 
-- variable names - variables are introduced by map expressions. NYI
+- structs: a collection of named fields, like `Edge { name: "script", referent: 0x7f453e9f53a0 }`.
+  Used for edges and nodes.
 
-- `root` - the snapshot's root node
+- streams: a stream of values of any type. Streams are lazy: values are computed only on demand.
 
-- `EXPR node` - the node whose id is `EXPR`. NYI
+- functions: closures that take one or more arguments.
 
-- `EXPR . FIELD` - the value of `FIELD` in `EXPR`, which must be a node or edge. NYI
+Expression syntax:
 
-- `EXPR referent` - the node that is the referent of the edge given by `EXPR`. NYI
-  Equivalent to `EXPR .referent node`.
+- numeric literals, both hex (`0x12fd`) and decimal (`40`)
 
-- `EXPR referents` - a stream of the nodes referred to by the node `EXPR`. NYI
-  Equivalent to `EXPR edges map referent;`
+- string literals: `"script"`
 
-- `STREAM first` - the first value produced by `STREAM`, or an error if `STREAM`
-  is empty.
+- boolean literals: `true` and `false`
 
-- `STREAM find PREDICATE` - the first item from `STREAM` that matches
-  `PREDICATE`. Equivalent to `STREAM { PREDICATE } first`. NYI
+- variable names: the usual
 
-Streams:
+- Function application is postfix: `x f` applies `f` to `x`. Application
+  associates to the right, so `x f g` is `(x f) g`: apply `f` to `x`, and then
+  apply `g` to the result.
 
-- `[ EXPR, ... ]` - a fixed-length stream consisting of the given values.
+- Function expressions: `|stream, name| stream { scriptFilename: name }` is a
+  function that takes two arguments, a stream and a string, and returns a
+  filtered version of the original stream.
 
-- `nodes` - a stream of all nodes, in a random order.
+- Predicate expressions: `{ P, ... }` is a function mapping values to booleans,
+  returning true for values that match all the given predicates. Predicates have
+  their own syntax, described below. Applying a predicate expression to a stream
+  is an implicit filter.
 
-- `EXPR edges` - a stream of the edges of the node that `EXPR` evaluates to.
+- `(EXPR)`: parentheses
 
-- `STREAM { PREDICATE }` - filter `STREAM` by `PREDICATE`. In some cases the
-  evaluator optimizes the evaluation of `STREAM` to produce only values matching
-  `PREDICATE`.
+Predicate syntax:
 
-- `STREAM paths` - given `STREAM`, a finite stream of ids, generate a stream of
-  all paths that begin with any id from `STREAM`. Here, a 'path' is a non-empty
-  stream of edges. Shortest paths are generated first. The paths contain no loops.
+- `EXPR`: matches values equal to the value of `EXPR`.
 
-- `STREAM map EXPR-TAIL ;` - Produce a new stream producing a value `V
-  EXPR-TAIL` for each value `V` produced by `STREAM`. For example, `root edges
-  map referent ;` is a stream of the nodes referred to by `root`'s edges. NYI
+- `/REGEXP/`: matches strings that match the given regular expression. Any
+  internal `/` or `\` characters must be escaped with `\` characters.
 
-- `STREAM until PREDICATE` - the prefix of `STREAM` until the first value
-  satisfying `PREDICATE`. NYI
+- `#/REGEXP/#`: Like `/REGEXP/`, except that no internal escapes are recognized;
+  the regexp ends at the earliest `/#` sequence.
 
-Predicates:
+- `id: P` matches structs whose field `id` matches `P`.
 
--   `EXPR` - accepts values equal to the given value.
+- `P and Q`, `P or Q`, `not P`: conjunction, disjunction, negation
 
-    If the expression is a string, and it's being matched against nodes or edges,
-    it behaves like the predicate `name: EXPRESSION`, accepting those nodes or
-    edges whose name matches the string.
+- `any P`, `all P`: matches a stream including any value matching `P`, or only
+  values that match `P`.
 
--   `FIELD: PREDICATE` - a predicate on edges or nodes, accepts values whose
-    given `FIELD` matches `PREDICATE`.
+- `ends P`: matches a stream whose last value matches `P`.
 
--   `/REGEXP/` - a predicate on strings, accepting those that match `REGEXP`.
+- `(P)`: parentheses
 
--   `PREDICATE && PREDICATE` - the intersection of the two predicates NYI
+Built-in functions:
 
--   `PREDICATE || PREDICATE` - the union of the two predicates
+- `nodes`: Return a stream of all nodes in the heap snapshot.
 
--   `! PREDICATE` - logical 'not'
+- `root`: The snapshot's root node.
 
--   `any PREDICATE`, `all PREDICATE` - predicates on streams. These accept if
-    the stream has any elements matching `PREDICATE`, and if all the stream's
-    elements match `PREDICATE`.
+- `NODE edges`: Return a stream of the edges of `NODE`
 
-Predicates on paths (streams of alternating nodes and edges):
+- `STREAM first`: Return the first element of `STREAM`.
 
-- `ends PREDICATE` - accepts the stream if its last element satisfies `PREDICATE`.
+- `STREAM F map`: Return a stream applying `F` to each element of `STREAM`.
 
-- `[ node, node, ... ]` - path whose nodes match the given predicates. NYI
-
-- `[ node, edge:node, ... ]` - path whose nodes and edges match the given predicates. NYI
-
-- `[ node1, ... node2, ... node3 ]` - (literal `...`) in the syntax: a path
-  starting with a node that matches `node1`, passing through a node that matches
-  `node2`, and ending with a node that matches `node3`. NYI
-
-## New syntax draft
-
-There's no reason to be too inventive.
-
-### Haskell / SML
-
-I'd like to try with using postfix application instead of prefix, because I'd
-like to try supporting as-you-type query exploration, and typing new operators
-at the end of something is easier than going to the front and inserting new
-operators. `x y f` isn't that different from `f x y`, is it?
-
-- Simple literals: numbers (`0x` hex and decimal), strings.
-
-- identifiers: built-in functions or local variables.
-
-- `ARG FN`: Function application. `0x10 node` applies `node` to `0x10`. This is
-  right-associative, so it curries to the left: A B C D is (A (B (C D))).
-
-- `(EXPR)`: grouping
-
-- `.FIELD`: a function from a node or an edge to the value of the field named. Hence,
-  `root.id` is an application of the function `.id` to `root`.
-
-- `\ID. EXPR`: lambda
-
-- `EXPR OP EXPR`: infix operator.
-
-- `(OP EXPR)`, `(EXPR OP)`: left and right infix operator slices
-
-and that's it. Built-in functions and constants:
-
-- `root`: the root node.
-
-- `nodes`: a stream of all nodes.
-
-- `STREAM first`: the first value in `STREAM`.
-
-- `NODE edges`: a stream of the outgoing edges of `NODE`.
-
-- `STREAM paths` or `NODE paths`: a stream of all paths proceeding from `NODE`
-  or the set of nodes given by `STREAM`.
-
-Infix operators:
-
-- `A = B`: equality
-
-- `A . B`: composition
-
-Examples:
-
-- `nodes (\n.n.id = 0x7fc384307f80) filter`, or
-- `nodes (.id . (= 0x7fc384307f80)) filter`
+- `NODE paths`: Return all paths starting at `NODE`, as a stream of streams:
+  `[[ NODE EDGE NODE EDGE ... NODE]]`. The paths are sorted by length, include
+  only the shortest path to any given final node, and include only one path to
+  any given node. If `NODE` is a stream of nodes, then produce all paths whose
+  starting point is included in the stream.
