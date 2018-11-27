@@ -136,7 +136,7 @@ PrimaryPredicate: Predicate = {
     "ends" <p: PrimaryPredicate> => Predicate::Ends(Box::new(p)),
     "any" <p: PrimaryPredicate> => Predicate::Any(Box::new(p)),
     "all" <p: PrimaryPredicate> => Predicate::All(Box::new(p)),
-    "!" <p: PrimaryPredicate> => Predicate::Not(Box::new(p)),
+    "not" <p: PrimaryPredicate> => Predicate::Not(Box::new(p)),
     "(" <p: Predicate> ")" => p,
 };
 
