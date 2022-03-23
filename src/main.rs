@@ -1,5 +1,3 @@
-#![feature(fnbox)] // for std::boxed::FnBox; see #28796
-
 // extern crates
 #[macro_use]
 extern crate failure;
