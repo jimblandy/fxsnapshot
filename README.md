@@ -5,8 +5,8 @@
 This program can query Firefox devtools heap snapshots, search for nodes, find
 paths between nodes, and so on.
 
-This requires Rust 1.30.0 (nightly as of 2018-9-14), for stable
-Iterator::find_map.
+This requires Rust 1.35.0 (nightly as of 2019-5-23), for stable
+Iterator::find_map and Box<FnOnce>.
 
 ## Taking heap snapshots
 
