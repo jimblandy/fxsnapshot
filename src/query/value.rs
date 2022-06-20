@@ -1,4 +1,4 @@
-use dump::{Edge, Node};
+use crate::dump::{Edge, Node};
 use failure;
 use fallible_iterator::FallibleIterator;
 use std::cmp::PartialEq;
@@ -32,7 +32,7 @@ pub type Stream<'a> = stream::Stream<'a, Value<'a>, Error>;
 pub type EvalResult<'a> = Result<Value<'a>, Error>;
 
 #[derive(Clone)]
-pub struct Function<'a>(pub Rc<'a + Callable<'a>>);
+pub struct Function<'a>(pub Rc<dyn 'a + Callable<'a>>);
 
 pub trait Callable<'dump> {
     /// Call `self`, passing the arguments given in `actuals`, running in the
@@ -106,7 +106,7 @@ enum Orientation {
 }
 
 impl<'a> Value<'a> {
-    pub fn top_write(&self, stream: &mut io::Write) -> Result<(), failure::Error> {
+    pub fn top_write(&self, stream: &mut dyn io::Write) -> Result<(), failure::Error> {
         self.write(&Orientation::Vertical(0), stream)
     }
 
@@ -114,7 +114,7 @@ impl<'a> Value<'a> {
     fn write(
         &self,
         orientation: &Orientation,
-        stream: &mut io::Write,
+        stream: &mut dyn io::Write,
     ) -> Result<(), failure::Error> {
         match self {
             Value::Number(n) => write!(stream, "{}", n)?,
@@ -144,7 +144,7 @@ impl<'a> Value<'a> {
 fn write_stream<'a>(
     stream: &Stream<'a>,
     orientation: &Orientation,
-    output: &mut io::Write,
+    output: &mut dyn io::Write,
 ) -> Result<(), failure::Error> {
     let mut stream = stream.clone();
     match orientation {

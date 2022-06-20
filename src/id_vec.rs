@@ -1,4 +1,5 @@
 //! The `IdVec` type, a vector indexed by a newtype around a `usize`.
+#![allow(dead_code)]
 
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut, Index, IndexMut};
@@ -6,7 +7,7 @@ use std::ops::{Deref, DerefMut, Index, IndexMut};
 /// An `IdVec<I, T>` is like a `Vec<T>` that uses `I` as its index type. `I` can
 /// be any type that implements `IdVecIndex`, which converts back and forth to
 /// `usize`; in practice, `IdVec` index types will be newtypes around `usize`.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct IdVec<I, T>(Vec<T>, PhantomData<I>);
 
 /// The trait for types that can index an `IdVec`.
@@ -16,7 +17,7 @@ pub struct IdVec<I, T>(Vec<T>, PhantomData<I>);
 /// avoid accidental conversions.
 pub trait IdVecIndex {
     fn to_usize(self) -> usize;
-    fn from_usize(usize) -> Self;
+    fn from_usize(size: usize) -> Self;
 }
 
 impl<I: IdVecIndex, T> IdVec<I, T>
@@ -95,5 +96,11 @@ impl<I, T> IntoIterator for IdVec<I, T> {
     type IntoIter = std::vec::IntoIter<T>;
     fn into_iter(self) -> std::vec::IntoIter<T> {
         self.0.into_iter()
+    }
+}
+
+impl<I, A> std::iter::FromIterator<A> for IdVec<I, A> {
+    fn from_iter<T: IntoIterator<Item = A>>(iter: T) -> Self {
+         IdVec(Vec::from_iter(iter), PhantomData)
     }
 }

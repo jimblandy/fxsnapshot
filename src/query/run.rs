@@ -15,7 +15,7 @@ use super::Activation;
 use super::Context;
 use super::value::{self, Callable, EvalResult, Function, Stream, TryUnwrap, Value};
 use super::{Plan, PredicatePlan};
-use dump::{Edge, Node, NodeId};
+use crate::dump::{Edge, Node, NodeId};
 
 use std::borrow::Cow;
 use std::fmt;
@@ -23,7 +23,7 @@ use std::iter::once;
 use std::rc::Rc;
 
 /// Given the expression `expr`, return a `Plan` that will evaluate it.
-pub fn plan_expr(expr: &Expr, analysis: &StaticAnalysis) -> Box<Plan> {
+pub fn plan_expr(expr: &Expr, analysis: &StaticAnalysis) -> Box<dyn Plan> {
     match expr {
         Expr::Number(n) => Box::new(Const(*n)),
         Expr::String(s) => Box::new(Const(s.clone())),
@@ -38,7 +38,7 @@ pub fn plan_expr(expr: &Expr, analysis: &StaticAnalysis) -> Box<Plan> {
     }
 }
 
-fn plan_var(var: &Var, analysis: &StaticAnalysis) -> Box<Plan> {
+fn plan_var(var: &Var, analysis: &StaticAnalysis) -> Box<dyn Plan> {
     match var {
         Var::Root => Box::new(Root),
         Var::Nodes => Box::new(Nodes),
@@ -48,7 +48,7 @@ fn plan_var(var: &Var, analysis: &StaticAnalysis) -> Box<Plan> {
     }
 }
 
-fn plan_app(arg: &Expr, fun: &Expr, analysis: &StaticAnalysis) -> Box<Plan> {
+fn plan_app(arg: &Expr, fun: &Expr, analysis: &StaticAnalysis) -> Box<dyn Plan> {
     let arg_plan = plan_expr(arg, analysis);
 
     // Handle direct applications of certain built-in functions.
@@ -68,7 +68,7 @@ fn plan_stream(id: LambdaId,
                stream: &Expr,
                predicate: &Predicate,
                analysis: &StaticAnalysis)
-               -> Box<Plan> {
+               -> Box<dyn Plan> {
     //let stream_plan = plan_expr(stream);
     //let predicate_plan = plan_predicate(predicate);
     match op {
@@ -78,8 +78,8 @@ fn plan_stream(id: LambdaId,
     }
 }
 
-fn plan_filter(id: LambdaId, stream: &Expr, predicate: &Predicate, analysis: &StaticAnalysis) -> Box<Plan> {
-    let stream_plan: Box<Plan>;
+fn plan_filter(id: LambdaId, stream: &Expr, predicate: &Predicate, analysis: &StaticAnalysis) -> Box<dyn Plan> {
+    let stream_plan: Box<dyn Plan>;
     let predicate_plan;
 
     // Can we implement `nodes { id: ... }` using `NodesById`, rather than a
@@ -123,14 +123,14 @@ fn plan_filter(id: LambdaId, stream: &Expr, predicate: &Predicate, analysis: &St
 /// all. Values of this type are the results of such an effort: either a plan
 /// for executing a predicate, or the answer we know it will always return.
 enum PlanOrTrivial {
-    Plan(Box<PredicatePlan>),
+    Plan(Box<dyn PredicatePlan>),
     Trivial(bool),
 }
 
 impl PlanOrTrivial {
     fn map_plan<F>(self, f: F) -> PlanOrTrivial
     where
-        F: FnOnce(Box<PredicatePlan>) -> Box<PredicatePlan>,
+        F: FnOnce(Box<dyn PredicatePlan>) -> Box<dyn PredicatePlan>,
     {
         match self {
             PlanOrTrivial::Plan(plan) => PlanOrTrivial::Plan(f(plan)),
@@ -240,7 +240,7 @@ where
 }
 
 #[derive(Debug)]
-struct StreamLiteral(Vec<Box<Plan>>);
+struct StreamLiteral(Vec<Box<dyn Plan>>);
 
 impl Plan for StreamLiteral {
     fn run<'a, 'd>(&self, act: &'a Activation<'a, 'd>, cx: &Context<'d>) -> EvalResult<'d> {
@@ -251,7 +251,7 @@ impl Plan for StreamLiteral {
 }
 
 #[derive(Debug)]
-struct First(Box<Plan>);
+struct First(Box<dyn Plan>);
 impl Plan for First {
     fn run<'a, 'd>(&self, act: &'a Activation<'a, 'd>, cx: &Context<'d>) -> EvalResult<'d> {
         let value = self.0.run(act, cx)?;
@@ -281,7 +281,7 @@ impl Plan for Nodes {
 }
 
 #[derive(Debug)]
-struct NodesById(Box<Plan>);
+struct NodesById(Box<dyn Plan>);
 impl Plan for NodesById {
     fn run<'a, 'd>(&self, act: &'a Activation<'a, 'd>, cx: &Context<'d>) -> EvalResult<'d> {
         let value = self.0.run(act, cx)?;
@@ -293,7 +293,7 @@ impl Plan for NodesById {
 }
 
 #[derive(Debug)]
-struct Edges(Box<Plan>);
+struct Edges(Box<dyn Plan>);
 impl Plan for Edges {
     fn run<'a, 'd>(&self, act: &'a Activation<'a, 'd>, cx: &Context<'d>) -> EvalResult<'d> {
         let value = self.0.run(act, cx)?;
@@ -306,9 +306,9 @@ impl Plan for Edges {
 
 #[derive(Debug)]
 struct Filter {
-    stream: Box<Plan>,
+    stream: Box<dyn Plan>,
     capture_list: CaptureList,
-    filter: Rc<PredicatePlan>,
+    filter: Rc<dyn PredicatePlan>,
 }
 
 impl Plan for Filter {
@@ -331,7 +331,7 @@ impl Plan for Filter {
 }
 
 #[derive(Debug)]
-struct Paths(Box<Plan>);
+struct Paths(Box<dyn Plan>);
 impl Plan for Paths {
     fn run<'a, 'd>(&self, act: &'a Activation<'a, 'd>, cx: &Context<'d>) -> EvalResult<'d> {
         let value = self.0.run(act, cx)?;
@@ -418,7 +418,7 @@ impl Plan for Map {
 }
 
 #[derive(Debug)]
-struct EqualPredicate(Box<Plan>);
+struct EqualPredicate(Box<dyn Plan>);
 impl PredicatePlan for EqualPredicate {
     fn test<'a, 'd>(&self, value: &Value<'d>, act: &Activation<'a, 'd>, cx: &Context<'d>) -> Result<bool, value::Error> {
         let given = self.0.run(act, cx)?;
@@ -429,7 +429,7 @@ impl PredicatePlan for EqualPredicate {
 #[derive(Debug)]
 struct FieldPredicate {
     field_name: String,
-    predicate: Box<PredicatePlan>,
+    predicate: Box<dyn PredicatePlan>,
 }
 impl PredicatePlan for FieldPredicate {
     fn test<'a, 'd>(&self, value: &Value<'d>, act: &Activation<'a, 'd>, cx: &Context<'d>) -> Result<bool, value::Error> {
@@ -481,7 +481,7 @@ fn get_edge_field<'v>(edge: &'v Edge, field: &str) -> Result<Option<Value<'v>>, 
 }
 
 #[derive(Debug)]
-struct Ends(Box<PredicatePlan>);
+struct Ends(Box<dyn PredicatePlan>);
 impl PredicatePlan for Ends {
     fn test<'a, 'd>(&self, value: &Value<'d>, act: &Activation<'a, 'd>, cx: &Context<'d>) -> Result<bool, value::Error> {
         let stream: &Stream = value.try_unwrap_ref()?;
@@ -500,7 +500,7 @@ impl PredicatePlan for Regex {
 }
 
 #[derive(Debug)]
-struct And(Vec<Box<PredicatePlan>>);
+struct And(Vec<Box<dyn PredicatePlan>>);
 impl PredicatePlan for And {
     fn test<'a, 'd>(&self, value: &Value<'d>, act: &Activation<'a, 'd>, cx: &Context<'d>) -> Result<bool, value::Error> {
         fallible_iterator::convert(self.0.iter().map(Ok)).all(|plan| plan.test(value, act, cx))
@@ -508,7 +508,7 @@ impl PredicatePlan for And {
 }
 
 #[derive(Debug)]
-struct Or(Vec<Box<PredicatePlan>>);
+struct Or(Vec<Box<dyn PredicatePlan>>);
 impl PredicatePlan for Or {
     fn test<'a, 'd>(&self, value: &Value<'d>, act: &Activation<'a, 'd>, cx: &Context<'d>) -> Result<bool, value::Error> {
         fallible_iterator::convert(self.0.iter().map(Ok)).any(|plan| plan.test(value, act, cx))
@@ -516,7 +516,7 @@ impl PredicatePlan for Or {
 }
 
 #[derive(Debug)]
-struct Not(Box<PredicatePlan>);
+struct Not(Box<dyn PredicatePlan>);
 impl PredicatePlan for Not {
     fn test<'a, 'd>(&self, value: &Value<'d>, act: &Activation<'a, 'd>, cx: &Context<'d>) -> Result<bool, value::Error> {
         Ok(!self.0.test(value, act, cx)?)
@@ -536,19 +536,19 @@ trait BlahJunction {
 
     /// Construct an instance from a vector of subterm plans, guaranteed to be
     /// non-empty.
-    fn construct(subplans: Vec<Box<PredicatePlan>>) -> Box<PredicatePlan>;
+    fn construct(subplans: Vec<Box<dyn PredicatePlan>>) -> Box<dyn PredicatePlan>;
 }
 
 impl BlahJunction for And {
     const CONSONANT: bool = true;
-    fn construct(subplans: Vec<Box<PredicatePlan>>) -> Box<PredicatePlan> {
+    fn construct(subplans: Vec<Box<dyn PredicatePlan>>) -> Box<dyn PredicatePlan> {
         Box::new(And(subplans))
     }
 }
 
 impl BlahJunction for Or {
     const CONSONANT: bool = false;
-    fn construct(subplans: Vec<Box<PredicatePlan>>) -> Box<PredicatePlan> {
+    fn construct(subplans: Vec<Box<dyn PredicatePlan>>) -> Box<dyn PredicatePlan> {
         Box::new(Or(subplans))
     }
 }
@@ -577,7 +577,7 @@ fn plan_junction<J: BlahJunction>(subterms: &[Predicate], analysis: &StaticAnaly
 }
 
 #[derive(Debug)]
-struct Any(Box<PredicatePlan>);
+struct Any(Box<dyn PredicatePlan>);
 impl PredicatePlan for Any {
     fn test<'a, 'd>(&self, value: &Value<'d>, act: &Activation<'a, 'd>, cx: &Context<'d>) -> Result<bool, value::Error> {
         let stream: &Stream = value.try_unwrap_ref()?;
@@ -586,7 +586,7 @@ impl PredicatePlan for Any {
 }
 
 #[derive(Debug)]
-struct All(Box<PredicatePlan>);
+struct All(Box<dyn PredicatePlan>);
 impl PredicatePlan for All {
     fn test<'a, 'd>(&self, value: &Value<'d>, act: &Activation<'a, 'd>, cx: &Context<'d>) -> Result<bool, value::Error> {
         let stream: &Stream = value.try_unwrap_ref()?;

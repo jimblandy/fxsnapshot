@@ -1,14 +1,14 @@
 // -*- mode: rust -*-
 
-use query::ast::{denoted_string,
-                 denoted_regex,
-                 Builder,
-                 Expr,
-                 LambdaId,
-                 Var,
-                 UseId,
-                 Predicate,
-                 PredicateOp};
+use crate::query::ast::{denoted_string,
+                        denoted_regex,
+                        Builder,
+                        Expr,
+                        LambdaId,
+                        Var,
+                        UseId,
+                        Predicate,
+                        PredicateOp};
 use regex;
 
 grammar;

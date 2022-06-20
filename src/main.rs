@@ -1,5 +1,3 @@
-#![feature(fnbox)] // for std::boxed::FnBox; see #28796
-
 // extern crates
 #[macro_use]
 extern crate failure;
@@ -23,7 +21,7 @@ mod dump;
 mod query;
 
 // intra-crate uses
-use dump::CoreDump;
+use crate::dump::CoreDump;
 
 // std uses
 use std::fs::File;

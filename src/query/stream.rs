@@ -2,7 +2,7 @@ use fallible_iterator::FallibleIterator;
 use std::rc::Rc;
 
 #[derive(Clone)]
-pub struct Stream<'a, T, E>(Rc<'a + CloneableStream<'a, T, E>>);
+pub struct Stream<'a, T, E>(Rc<dyn CloneableStream<'a, T, E> + 'a>);
 
 impl<'a, T: 'a, E> Stream<'a, T, E>
 {
@@ -14,7 +14,7 @@ impl<'a, T: 'a, E> Stream<'a, T, E>
 }
 
 trait CloneableStream<'a, T, E> {
-    fn rc_clone(&self) -> Rc<'a + CloneableStream<'a, T, E>>;
+    fn rc_clone(&self) -> Rc<dyn CloneableStream<'a, T, E> + 'a>;
     fn cs_next(&mut self) -> Result<Option<T>, E>;
 }
 
@@ -23,7 +23,7 @@ where
     I: 'a + FallibleIterator + Clone,
     I::Item: 'a
 {
-    fn rc_clone(&self) -> Rc<'a + CloneableStream<'a, I::Item, I::Error>> {
+    fn rc_clone(&self) -> Rc<dyn CloneableStream<'a, I::Item, I::Error> + 'a> {
         Rc::new(self.clone())
     }
 

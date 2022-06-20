@@ -1,6 +1,6 @@
 //! Breadth-first traversal of the graph of `Node`s in a `CoreDump`.
 
-use dump::{CoreDump, Edge, NodeId};
+use crate::dump::{CoreDump, Edge, NodeId};
 
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, VecDeque};

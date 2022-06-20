@@ -1,4 +1,4 @@
-use id_vec::IdVec;
+use crate::id_vec::IdVec;
 use super::{Context, EvalResult, Plan, StaticError, Value};
 use super::ast::{Expr, LambdaId, UseId, Var};
 use super::run::plan_expr;
@@ -35,7 +35,7 @@ struct LambdaExpr {
     arity: usize,
 
     /// An evaluation plan for the body of the closure.
-    body: Box<Plan>,
+    body: Box<dyn Plan>,
 
     /// How to build the `captured` vector of a `Closure` created for this
     /// `LambdaExpr`.
@@ -131,6 +131,7 @@ impl Plan for Crash {
 }
 
 pub struct ActivationBase<'dump> {
+    #[allow(dead_code)]
     closure: Closure<'dump>
 }
 
@@ -251,7 +252,7 @@ impl fmt::Debug for VarAddr {
 }
 
 /// Information about a particular lambda expression.
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 struct LambdaInfo {
     /// The number of formal parameters this lambda expects.
     arity: usize,
@@ -546,7 +547,7 @@ impl Plan for Actual {
     }
 }
 
-pub fn plan_lexical(id: UseId, _name: &str, analysis: &StaticAnalysis) -> Box<Plan> {
+pub fn plan_lexical(id: UseId, _name: &str, analysis: &StaticAnalysis) -> Box<dyn Plan> {
     match analysis.0.referents[id] {
         VarLocation::Actual(i) => Box::new(Actual(i)),
         VarLocation::Captured(i) => Box::new(Captured(i)),
@@ -556,7 +557,7 @@ pub fn plan_lexical(id: UseId, _name: &str, analysis: &StaticAnalysis) -> Box<Pl
 #[derive(Debug)]
 struct LambdaExprPlan(Rc<LambdaExpr>);
 
-pub fn plan_lambda(id: LambdaId, formals: &[String], body: &Expr, analysis: &StaticAnalysis) -> Box<Plan> {
+pub fn plan_lambda(id: LambdaId, formals: &[String], body: &Expr, analysis: &StaticAnalysis) -> Box<dyn Plan> {
     let lambda = LambdaExpr {
         name: format!("anonymous {:?}", id),
         arity: formals.len(),
@@ -577,11 +578,11 @@ impl Plan for LambdaExprPlan {
 
 #[derive(Debug)]
 struct Call {
-    arg: Box<Plan>,
-    fun: Box<Plan>
+    arg: Box<dyn Plan>,
+    fun: Box<dyn Plan>
 }
 
-pub fn plan_activation(arg: Box<Plan>, fun: Box<Plan>) -> Box<Plan> {
+pub fn plan_activation(arg: Box<dyn Plan>, fun: Box<dyn Plan>) -> Box<dyn Plan> {
     Box::new(Call { arg, fun })
 }
 
@@ -600,11 +601,12 @@ impl Plan for Call {
 
 #[cfg(test)]
 mod test {
-    use super::{CaptureMap, CaptureMapBuilder, VarAddr};
-    use query::ast::{Expr, LambdaId, UseId};
-    use query::test_utils::*;
-    use query::walkers::ExprWalker;
-    use std::collections::{HashMap, HashSet};
+    use super::{CaptureMap, CaptureMapBuilder, LambdaInfo, UseInfo, VarAddr};
+    use crate::query::ast::{Expr, LambdaId};
+    use crate::query::walkers::Walker;
+    use crate::query::test_utils::*;
+    use crate::id_vec::IdVec;
+    use std::collections::HashSet;
     use std::iter::FromIterator;
 
     fn varaddr(lambda: usize, index: usize) -> VarAddr {
@@ -631,19 +633,19 @@ mod test {
 
     #[test]
     fn single_lambda() {
-        let expr = lambda(70, &["x", "y", "z"], app(var(38, "y"), var(92, "z")));
+        let expr = lambda(0, &["x", "y", "z"], app(var(0, "y"), var(1, "z")));
         let cm = make_capture_map(&expr);
         assert_eq!(
             cm.lambdas,
-            HashMap::from_iter(vec![
-                       (LambdaId(70), HashSet::new()) // no free variables
-                   ])
+            IdVec::from_iter(vec![
+                LambdaInfo { arity: 3, parent: None, captured: HashSet::default() }
+            ])
         );
         assert_eq!(
             cm.uses,
-            HashMap::from_iter(vec![
-                (UseId(38), varaddr(70, 1)),
-                (UseId(92), varaddr(70, 2))
+            IdVec::from_iter(vec![
+                UseInfo { lambda: Some(LambdaId(0)), referent: varaddr(0, 1) },
+                UseInfo { lambda: Some(LambdaId(0)), referent: varaddr(0, 2) }
             ])
         );
     }
@@ -651,23 +653,24 @@ mod test {
     #[test]
     fn two_lambdas() {
         let expr = lambda(
-            208,
+            0,
             &["x", "y"],
-            lambda(193, &["z", "w"], app(var(215, "y"), var(50, "z"))),
+            lambda(1, &["z", "w"], app(var(0, "y"), var(1, "z"))),
         );
         let cm = make_capture_map(&expr);
         assert_eq!(
             cm.lambdas,
-            HashMap::from_iter(vec![
-                (LambdaId(208), HashSet::new()), // no free variables
-                (LambdaId(193), HashSet::from_iter(vec![varaddr(208, 1)]))
+            IdVec::from_iter(vec![
+                LambdaInfo { arity: 2, parent: None, captured: HashSet::new() },
+                LambdaInfo { arity: 2, parent: Some(LambdaId(0)),
+                             captured: HashSet::from_iter(vec![varaddr(0, 1)]) },
             ])
         );
         assert_eq!(
             cm.uses,
-            HashMap::from_iter(vec![
-                (UseId(215), varaddr(208, 1)),
-                (UseId(50), varaddr(193, 0))
+            IdVec::from_iter(vec![
+                UseInfo { lambda: Some(LambdaId(1)), referent: varaddr(0, 1) },
+                UseInfo { lambda: Some(LambdaId(1)), referent: varaddr(1, 0) },
             ])
         );
     }
@@ -676,19 +679,19 @@ mod test {
     fn three_lambdas() {
         // |a,b| |c,d| b d (|a,d| (a b c d))
         let expr = lambda(
-            152,
+            0,
             &["a", "b"],
             lambda(
-                30,
+                1,
                 &["c", "d"],
                 app(
-                    app(var(9, "b"), var(179, "d")),
+                    app(var(0, "b"), var(1, "d")),
                     lambda(
-                        106,
+                        2,
                         &["a", "d"],
                         app(
-                            app(app(var(89, "a"), var(109, "b")), var(57, "c")),
-                            var(161, "d"),
+                            app(app(var(2, "a"), var(3, "b")), var(4, "c")),
+                            var(5, "d"),
                         ),
                     ),
                 ),
@@ -697,24 +700,23 @@ mod test {
         let cm = make_capture_map(&expr);
         assert_eq!(
             cm.lambdas,
-            HashMap::from_iter(vec![
-                (LambdaId(152), HashSet::new()), // no free variables
-                (LambdaId(30), HashSet::from_iter(vec![varaddr(152, 1)])),
-                (
-                    LambdaId(106),
-                    HashSet::from_iter(vec![varaddr(152, 1), varaddr(30, 0)])
-                ),
+            IdVec::from_iter(vec![
+                LambdaInfo { arity: 2, parent: None, captured: HashSet::new() },
+                LambdaInfo { arity: 2, parent: Some(LambdaId(0)), 
+                             captured: HashSet::from_iter(vec![varaddr(0, 1)]) },
+                LambdaInfo { arity: 2, parent: Some(LambdaId(1)),
+                             captured: HashSet::from_iter(vec![varaddr(0, 1), varaddr(1, 0)]) },
             ])
         );
         assert_eq!(
             cm.uses,
-            HashMap::from_iter(vec![
-                (UseId(9), varaddr(152, 1)),
-                (UseId(179), varaddr(30, 1)),
-                (UseId(89), varaddr(106, 0)),
-                (UseId(109), varaddr(152, 1)),
-                (UseId(57), varaddr(30, 0)),
-                (UseId(161), varaddr(106, 1)),
+            IdVec::from_iter(vec![
+                UseInfo { lambda: Some(LambdaId(1)), referent: varaddr(0, 1) },
+                UseInfo { lambda: Some(LambdaId(1)), referent: varaddr(1, 1) },
+                UseInfo { lambda: Some(LambdaId(2)), referent: varaddr(2, 0) },
+                UseInfo { lambda: Some(LambdaId(2)), referent: varaddr(0, 1) },
+                UseInfo { lambda: Some(LambdaId(2)), referent: varaddr(1, 0) },
+                UseInfo { lambda: Some(LambdaId(2)), referent: varaddr(2, 1) },
             ])
         );
     }

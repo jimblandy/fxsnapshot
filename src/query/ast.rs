@@ -1,8 +1,7 @@
 //! A query expression, syntactically well-formed.
 
-use id_vec::IdVecIndex;
+use crate::id_vec::IdVecIndex;
 use regex;
-use std::boxed::FnBox;
 use std::fmt;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -125,7 +124,7 @@ impl PartialEq for Predicate {
 
 impl Eq for Predicate {}
 
-pub type Builder = Box<FnBox(Box<Expr>) -> Box<Expr>>;
+pub type Builder = Box<dyn FnOnce(Box<Expr>) -> Box<Expr>>;
 
 // Given the text of a string literal, `literal`, return the `String` it
 // denotes.

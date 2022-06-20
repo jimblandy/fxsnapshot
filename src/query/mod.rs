@@ -9,6 +9,7 @@ mod walkers;
 mod test;
 mod test_utils;
 
+#[allow(unused_parens)]
 mod grammar {
     include!(concat!(env!("OUT_DIR"), "/query/query.rs"));
 }
@@ -17,7 +18,7 @@ pub use self::fun::{Activation, ActivationBase, StaticAnalysis};
 pub use self::grammar::Token;
 pub use self::value::{EvalResult, Value};
 
-use dump::CoreDump;
+use crate::dump::CoreDump;
 use self::grammar::QueryParser;
 use self::run::plan_expr;
 use std::fmt;
@@ -32,14 +33,14 @@ pub trait Plan: fmt::Debug {
     /// Use `Context::from_dump` to construct an initial `Context`.
     /// `Activation::for_eval` constructs an `Activation` appropriate for
     /// running plans returned by `compile`.
-    fn run<'a, 'd>(&self, &'a Activation<'a, 'd>, &Context<'d>) -> EvalResult<'d>;
+    fn run<'a, 'd>(&self, act: &'a Activation<'a, 'd>, cx: &Context<'d>) -> EvalResult<'d>;
 }
 
 /// A plan for evaluating a predicate on a `Value`.
 pub trait PredicatePlan: fmt::Debug {
     /// Determine whether this predicate, executed in the given environment,
     /// matches `value`.
-    fn test<'a, 'd>(&self, &Value<'d>, &Activation<'a, 'd>, &Context<'d>) -> Result<bool, value::Error>;
+    fn test<'a, 'd>(&self, value: &Value<'d>, act: &Activation<'a, 'd>, cx: &Context<'d>) -> Result<bool, value::Error>;
 }
 
 /// An execution context: general parameters for the entire query, like which
@@ -56,7 +57,7 @@ impl<'a> Context<'a> {
     }
 }
 
-pub fn compile(query_text: &str) -> Result<Box<Plan>, StaticError> {
+pub fn compile(query_text: &str) -> Result<Box<dyn Plan>, StaticError> {
     let mut expr = QueryParser::new().parse(&query_text)?;
     let analysis = StaticAnalysis::from_expr(&mut expr)?;
     let plan = plan_expr(&expr, &analysis);

@@ -11,8 +11,8 @@ pub fn nodes() -> Box<Expr> {
     Box::new(Expr::Var(Var::Nodes))
 }
 
-pub fn pred_op(stream: Box<Expr>, op: PredicateOp, pred: Box<Predicate>) -> Box<Expr> {
-    Box::new(Expr::Predicate(stream, op, pred))
+pub fn pred_op(stream: Box<Expr>, op: PredicateOp, predicate: Box<Predicate>) -> Box<Expr> {
+    Box::new(Expr::PredicateOp { id: LambdaId(0), stream, op, predicate })
 }
 
 pub fn filter(stream: Box<Expr>, pred: Box<Predicate>) -> Box<Expr> {
