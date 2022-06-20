@@ -12,7 +12,7 @@ failure = "0.1.2"
 failure_derive = "0.1.2"
 lalrpop-util = "0.16.0"
 memmap = "0.6.2"
-quick-protobuf = "0.6.3"
+quick-protobuf = "0.8.0"
 regex = "1.0"
 
 [dependencies.fallible-iterator]
@@ -21,4 +21,4 @@ rev = "11ea3bf0e6ad2bc4f4fe220d6c3332942e5dfa35"
 
 [build-dependencies]
 lalrpop = "0.16.0"
-pb-rs = "0.5.0"
+pb-rs = "0.9.1"

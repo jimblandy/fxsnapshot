@@ -219,9 +219,9 @@ dependencies = [
 
 [[package]]
 name = "env_logger"
-version = "0.5.13"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "15b0a4d2e39f8420210be8b27eeda28029729e2fd4291019455016c348240c38"
+checksum = "44533bbbb3bb3c1fa17d9f2e4e38bbbaf8396ba82193c4cb1b6445d711445d36"
 dependencies = [
  "atty",
  "humantime",
@@ -466,14 +466,12 @@ checksum = "a86ed3f5f244b372d6b1a00b72ef7f8876d0bc6a78a4c9985c53614041512063"
 
 [[package]]
 name = "pb-rs"
-version = "0.5.0"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3e76cd462e6a255a73d1da15ebb7cb99331716fdff5f888f5c911005992c2ec3"
+checksum = "5399c5c02fa9b773e9b7f9ee49d1772f118ff1a1e4170fa8c908eb5adb2babf3"
 dependencies = [
  "clap",
  "env_logger",
- "failure",
- "failure_derive",
  "log",
  "nom",
 ]
@@ -530,13 +528,11 @@ checksum = "a1d01941d82fa2ab50be1e79e6714289dd7cde78eba4c074bc5a4374f650dfe0"
 
 [[package]]
 name = "quick-protobuf"
-version = "0.6.4"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "355012487accebbcfebc5b60c9692bdbe7e4008a6ac9e0184bd0d6f3961936c2"
+checksum = "6ca6639207ac869e31cca06b8adbc7676278f22b321e51115766009b4f192dbb"
 dependencies = [
  "byteorder",
- "failure",
- "failure_derive",
 ]
 
 [[package]]
