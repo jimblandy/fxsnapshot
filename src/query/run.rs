@@ -6,7 +6,6 @@
 //! [pe]: fn.plan_expr.html
 
 use fallible_iterator::{self, FallibleIterator};
-use regex;
 
 use super::ast::{Expr, LambdaId, Predicate, PredicateOp, Var};
 use super::breadth_first::{BreadthFirst, Step};

@@ -313,7 +313,7 @@ impl<'e> CaptureMapBuilder<'e> {
     /// If there is a variable with the given `name` in scope, return its
     /// address. Otherwise, return `None`.
     fn find_var(&self, name: &str) -> Option<VarAddr> {
-        for &(lambda_id, ref formals) in self.scopes.iter().rev() {
+        for &(lambda_id, formals) in self.scopes.iter().rev() {
             if let Some(index) = formals.iter().position(|s| s == name) {
                 return Some(VarAddr {
                     lambda: lambda_id,
@@ -351,9 +351,9 @@ impl<'e> Walker<'e> for CaptureMapBuilder<'e> {
                 // The stream falls outside the capture, but the predicate runs
                 // while the stream is being consumed, so it needs to be inside
                 // the capture.
-                self.walk_expr(&stream)?;
+                self.walk_expr(stream)?;
                 self.with_capture(*id, &[], enclosing, |builder| {
-                    builder.walk_predicate(&predicate)
+                    builder.walk_predicate(predicate)
                 })
             }
             other => other.walk_children(self),

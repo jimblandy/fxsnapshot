@@ -1,13 +1,13 @@
 //! A query expression, syntactically well-formed.
 
 use crate::id_vec::IdVecIndex;
-use regex;
 use std::fmt;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Expr {
     Number(u64),
     String(String),
+    #[allow(clippy::vec_box)]
     StreamLiteral(Vec<Box<Expr>>),
 
     PredicateOp {

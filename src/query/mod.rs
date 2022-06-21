@@ -10,6 +10,7 @@ mod test;
 mod test_utils;
 
 #[allow(unused_parens)]
+#[allow(clippy::all)]
 mod grammar {
     include!(concat!(env!("OUT_DIR"), "/query/query.rs"));
 }
@@ -18,6 +19,7 @@ pub use self::fun::{Activation, ActivationBase, StaticAnalysis};
 pub use self::grammar::Token;
 pub use self::value::{EvalResult, Value};
 
+use thiserror::Error;
 use crate::dump::CoreDump;
 use self::grammar::QueryParser;
 use self::run::plan_expr;
@@ -68,12 +70,12 @@ pub fn compile(query_text: &str) -> Result<Box<dyn Plan>, StaticError> {
 pub type ParseError<'input> = lalrpop_util::ParseError<usize, Token<'input>, &'static str>;
 
 /// An error raised during query planning.
-#[derive(Clone, Fail, Debug)]
+#[derive(Clone, Error, Debug)]
 pub enum StaticError {
-    #[fail(display = "error parsing query: {}", _0)]
+    #[error("error parsing query: {0}")]
     Parse(String),
 
-    #[fail(display = "unbound variable '{}'", name)]
+    #[error("unbound variable '{name}'")]
     UnboundVar { name: String },
 }
 

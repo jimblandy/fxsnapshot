@@ -8,12 +8,15 @@ description = "Command-line tool for querying Firefox heap snapshots."
 edition = "2021"
 
 [dependencies]
-failure = "0.1.2"
-failure_derive = "0.1.2"
+anyhow = "1"
+thiserror = "1"
 lalrpop-util = "0.16.0"
 memmap = "0.6.2"
-quick-protobuf = "0.8.0"
 regex = "1.0"
+
+[dependencies.quick-protobuf]
+version = "0.8.0"
+features = [ "std" ]
 
 [dependencies.fallible-iterator]
 git = "https://github.com/sfackler/rust-fallible-iterator.git"

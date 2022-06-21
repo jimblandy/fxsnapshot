@@ -1,19 +1,12 @@
-// extern crates
-#[macro_use]
-extern crate failure;
-#[macro_use]
-extern crate failure_derive;
-extern crate fallible_iterator;
-extern crate lalrpop_util;
-extern crate memmap;
-extern crate quick_protobuf;
-extern crate regex;
+// This is only a problem in the lalrpop output, but because of Clippy
+// issue #7290, we have to put this at the top of the crate.
+#![allow(clippy::single_component_path_imports)]
 
 #[macro_use]
 mod id_vec;
 
 // extern crate uses
-use failure::{Error, ResultExt};
+use anyhow::{bail, Context, Error};
 use memmap::Mmap;
 
 // intra-crate modules
@@ -30,12 +23,12 @@ use std::path::Path;
 fn run() -> Result<(), Error> {
     let args = std::env::args_os().skip(1).collect::<Vec<_>>();
     if args.len() != 2 {
-        return Err(format_err!("Usage: fxsnapshot FILE QUERY"));
+        bail!("Usage: fxsnapshot FILE QUERY");
     }
 
     // Compile the query given on the command line.
     let query_text = args[1].to_string_lossy().into_owned();
-    let query = query::compile(&query_text).map_err(|e| format_err!("{}", e))?;
+    let query = query::compile(&query_text)?;
 
     // Open and index the core dump file.
     let path = Path::new(&args[0]);
@@ -60,9 +53,7 @@ fn run() -> Result<(), Error> {
 
 fn main() {
     if let Err(e) = run() {
-        for failure in e.iter_chain() {
-            eprintln!("{}", failure);
-        }
+        eprintln!("{:#}", e);
         std::process::exit(1);
     }
 }

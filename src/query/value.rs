@@ -1,5 +1,4 @@
 use crate::dump::{Edge, Node};
-use failure;
 use fallible_iterator::FallibleIterator;
 use std::cmp::PartialEq;
 use std::borrow::Cow;
@@ -55,28 +54,28 @@ pub trait Callable<'dump> {
 }
 
 /// An error raised during expression evaluation.
-#[derive(Clone, Fail, Debug)]
+#[derive(Clone, thiserror::Error, Debug)]
 pub enum Error {
     /// Type mismatch.
-    #[fail(display = "expected type {}, got {}", expected, actual)]
+    #[error("expected type {actual}, got {expected}")]
     Type {
         actual: &'static str,
         expected: &'static str,
     },
 
     /// Trying to draw a value (`first`, etc.) from an empty stream.
-    #[fail(display = "stream produced no values")]
+    #[error("stream produced no values")]
     EmptyStream,
 
     /// Matching on a non-existent Node or Edge field.
-    #[fail(display = "{} have no field named {}", value_type, field)]
+    #[error("{value_type} have no field named {field}")]
     NoSuchField {
         value_type: &'static str,
         field: String,
     },
 
     /// Attempt to apply a value that is not a function.
-    #[fail(display = "attempt to apply value that is not a function")]
+    #[error("attempt to apply value that is not a function")]
     NotAFunction,
 }
 
@@ -106,7 +105,7 @@ enum Orientation {
 }
 
 impl<'a> Value<'a> {
-    pub fn top_write(&self, stream: &mut dyn io::Write) -> Result<(), failure::Error> {
+    pub fn top_write(&self, stream: &mut dyn io::Write) -> Result<(), anyhow::Error> {
         self.write(&Orientation::Vertical(0), stream)
     }
 
@@ -115,7 +114,7 @@ impl<'a> Value<'a> {
         &self,
         orientation: &Orientation,
         stream: &mut dyn io::Write,
-    ) -> Result<(), failure::Error> {
+    ) -> Result<(), anyhow::Error> {
         match self {
             Value::Number(n) => write!(stream, "{}", n)?,
             Value::String(s) => write!(stream, "{}", s)?,
@@ -145,7 +144,7 @@ fn write_stream<'a>(
     stream: &Stream<'a>,
     orientation: &Orientation,
     output: &mut dyn io::Write,
-) -> Result<(), failure::Error> {
+) -> Result<(), anyhow::Error> {
     let mut stream = stream.clone();
     match orientation {
         Orientation::Horizontal(indent) => {
